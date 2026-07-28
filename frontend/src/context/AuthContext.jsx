@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchCurrentUser = async (authToken) => {
     try {
-      const response = await axios.get('http://localhost:8000/api/auth/me', {
+      const response = await axios.get('http://localhost:8085/api/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` }
       });
       setUser(response.data);
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:8000/api/auth/login', { email, password });
+      const response = await axios.post('http://localhost:8085/api/auth/login', { email, password });
       const { access_token } = response.data;
       localStorage.setItem('token', access_token);
       setToken(access_token);
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (fullName, email, password, role) => {
     try {
-      await axios.post('http://localhost:8000/api/auth/register', {
+      await axios.post('http://localhost:8085/api/auth/register', {
         full_name: fullName,
         email,
         password,

@@ -25,6 +25,7 @@ export default function Layout({ children }) {
     { name: 'Assessments', href: '/assessments', icon: CheckSquare },
     { name: 'Roadmap', href: '/roadmap', icon: Map },
     { name: 'AI Counselor', href: '/chat', icon: MessageSquare },
+    { name: 'My Profile', href: '/profile', icon: UserIcon },
   ];
 
   const handleLogout = () => {

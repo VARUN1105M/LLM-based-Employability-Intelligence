@@ -10,6 +10,7 @@ import ResumeAnalyzer from './components/ResumeAnalyzer';
 import Assessments from './components/Assessments';
 import Roadmap from './components/Roadmap';
 import Chatbot from './components/Chatbot';
+import Profile from './components/Profile';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -77,6 +78,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />

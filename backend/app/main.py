@@ -9,6 +9,7 @@ from app.database import engine, Base, get_db
 from app.models import User, StudentProfile, Mentor
 from app.schemas import UserCreate, UserLogin, Token, UserResponse
 from app.security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from app.routers import profiles
 
 # Initialize Database tables
 Base.metadata.create_all(bind=engine)
@@ -19,6 +20,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.include_router(profiles.router)
+
 # CORS setup for frontend integration
 app.add_middleware(
     CORSMiddleware,
@@ -28,26 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("email")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
-        raise credentials_exception
-    return user
+from app.dependencies import get_current_user, oauth2_scheme
 
 @app.get("/api/health")
 def health_check():

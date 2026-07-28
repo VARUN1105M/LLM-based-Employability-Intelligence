@@ -88,3 +88,12 @@ This repository contains the source code for the final year IEEE-level project: 
 3. **Skill Assessments:** Offers logical aptitude and technical quizzes that feed grades directly into the ATIA engine.
 4. **Adaptive Roadmap:** Generates personalized week-by-week learning paths matching your targeted career paths.
 5. **AI Counselor (RAG):** Interactive chatbot powered by Llama 3.1 & local documentation databases.
+
+
+
+ Test Credentials (All roles use the same password)
+Password (All roles): password123
+Student Account: student@example.com
+Mentor Account: mentor@example.com
+Recruiter Account: recruiter@example.com
+Admin Account: admin@example.com

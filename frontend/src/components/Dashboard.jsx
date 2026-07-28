@@ -41,7 +41,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const profileRes = await axios.get('http://localhost:8000/api/auth/me');
+        const profileRes = await axios.get('http://localhost:8085/api/auth/me');
         // If profile loaded successfully, try fetching custom predictions, else fallback
         // We will fallback to mock data since we just initialized the DB
         setData({

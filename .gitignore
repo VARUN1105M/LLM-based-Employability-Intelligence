@@ -1,0 +1,33 @@
+# Python virtual environments & caches
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+*.db
+temp_test.db
+
+# Environment variables (highly sensitive)
+.env
+.env*.local
+
+# Node.js dependencies & builds
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS files
+Thumbs.db
+.DS_Store

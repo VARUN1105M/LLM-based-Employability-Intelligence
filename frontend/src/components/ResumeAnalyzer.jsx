@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { Upload, FileText, CheckCircle2, RefreshCw, AlertCircle, FileUp } from 'lucide-react';
 
 export default function ResumeAnalyzer() {
@@ -6,6 +7,7 @@ export default function ResumeAnalyzer() {
   const [uploading, setUploading] = useState(false);
   const [analyzed, setAnalyzed] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
 
   const mockAnalysis = {
     score: 78,
@@ -46,21 +48,35 @@ export default function ResumeAnalyzer() {
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!file) return;
     setUploading(true);
-    // Simulate API request processing
-    setTimeout(() => {
-      setUploading(false);
+    setError('');
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await axios.post('http://localhost:8085/api/resume/analyze', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      setResult(response.data);
       setAnalyzed(true);
-      setResult(mockAnalysis);
-    }, 2500);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to analyze resume. Please verify the file is a valid PDF.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const resetAnalyzer = () => {
     setFile(null);
     setAnalyzed(false);
     setResult(null);
+    setError('');
   };
 
   return (
@@ -72,6 +88,13 @@ export default function ResumeAnalyzer() {
           Upload your resume in PDF format to evaluate it against industry-standard ATS screening filters and extract your skill set.
         </p>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center">
+          <AlertCircle className="h-5 w-5 mr-2 shrink-0" />
+          {error}
+        </div>
+      )}
 
       {!analyzed ? (
         /* Upload Area */

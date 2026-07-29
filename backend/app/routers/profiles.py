@@ -430,7 +430,7 @@ def get_project_github_analysis(project_id: UUID, current_user: User = Depends(g
                 links = commits_res.headers["Link"]
                 for link in links.split(","):
                     if 'rel="last"' in link:
-                        match = re.search(r"page=(\d+)", link)
+                        match = re.search(r"[?&]page=(\d+)", link)
                         if match:
                             total_commits = int(match.group(1))
             if total_commits == 0:

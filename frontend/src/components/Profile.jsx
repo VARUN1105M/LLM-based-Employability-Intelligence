@@ -110,6 +110,25 @@ export default function Profile() {
     }
   };
 
+  const deleteResume = async () => {
+    if (!window.confirm('Are you sure you want to delete your resume? This will also remove any extracted skills linked to it.')) {
+      return;
+    }
+    setUploadingResume(true);
+    setError('');
+    setSuccess(false);
+    try {
+      await axios.delete('http://localhost:8085/api/profiles/resume/delete');
+      setSuccess(true);
+      fetchProfile();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to delete resume.');
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       const response = await axios.get('http://localhost:8085/api/profiles/me');
@@ -417,25 +436,36 @@ export default function Profile() {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center space-x-2 shrink-0">
-                  <label className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer transition-all">
-                    {resumeFile ? resumeFile.name : 'Choose PDF'}
-                    <input
-                      type="file"
-                      accept=".pdf"
-                      className="hidden"
-                      onChange={(e) => setResumeFile(e.target.files[0])}
-                    />
-                  </label>
+                {profile.student_details?.resume_url ? (
                   <button
                     type="button"
-                    onClick={uploadResume}
-                    disabled={uploadingResume || !resumeFile}
-                    className="px-4 py-2 bg-gradient-to-r from-primary-600 to-indigo-655 hover:from-primary-500 hover:to-indigo-555 disabled:opacity-50 text-xs font-bold rounded-lg text-white transition-colors"
+                    onClick={deleteResume}
+                    disabled={uploadingResume}
+                    className="px-4 py-2 border border-red-500/30 hover:border-red-500/60 bg-red-500/5 hover:bg-red-500/10 text-xs font-bold rounded-lg text-red-400 transition-colors"
                   >
-                    {uploadingResume ? 'Processing...' : 'Upload & Extract'}
+                    Delete Resume
                   </button>
-                </div>
+                ) : (
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <label className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer transition-all">
+                      {resumeFile ? resumeFile.name : 'Choose PDF'}
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={(e) => setResumeFile(e.target.files[0])}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={uploadResume}
+                      disabled={uploadingResume || !resumeFile}
+                      className="px-4 py-2 bg-gradient-to-r from-primary-600 to-indigo-655 hover:from-primary-500 hover:to-indigo-555 disabled:opacity-50 text-xs font-bold rounded-lg text-white transition-colors"
+                    >
+                      {uploadingResume ? 'Processing...' : 'Upload & Extract'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 

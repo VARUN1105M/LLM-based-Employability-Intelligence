@@ -515,6 +515,22 @@ def upload_file_to_supabase_storage(supabase_url: str, supabase_key: str, bucket
         
     return ""
 
+def delete_file_from_supabase_storage(supabase_url: str, supabase_key: str, bucket_name: str, file_path: str) -> bool:
+    import requests
+    url_base = supabase_url.rstrip("/")
+    delete_url = f"{url_base}/storage/v1/object/{bucket_name}/{file_path}"
+    headers = {
+        "Authorization": f"Bearer {supabase_key}",
+        "apikey": supabase_key
+    }
+    try:
+        res = requests.delete(delete_url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            return True
+    except Exception as e:
+        print(f"Failed to delete from Supabase storage: {e}")
+    return False
+
 @router.post("/resume/upload")
 async def upload_student_resume(
     file: UploadFile = File(...), 
@@ -593,3 +609,51 @@ async def upload_student_resume(
         "resume_url": student.resume_url,
         "skills_extracted": skills
     }
+
+@router.delete("/resume/delete")
+async def delete_student_resume(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can manage profile resumes")
+        
+    student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+        
+    if not student.resume_url:
+        raise HTTPException(status_code=400, detail="No resume is currently uploaded")
+        
+    filename = f"{current_user.id}.pdf"
+    
+    # Try deleting from Supabase storage bucket
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        delete_file_from_supabase_storage(
+            settings.SUPABASE_URL,
+            settings.SUPABASE_KEY,
+            "resumes",
+            filename
+        )
+        
+    # Delete locally if it was fallback
+    local_path = os.path.join("uploads/resumes", filename)
+    if os.path.exists(local_path):
+        try:
+            os.remove(local_path)
+        except Exception:
+            pass
+            
+    # Reset resume URL
+    student.resume_url = None
+    
+    # Clear extracted skills from resume
+    db.query(ExtractedSkill).filter(
+        ExtractedSkill.student_id == current_user.id,
+        ExtractedSkill.source == "Resume"
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    db.refresh(student)
+    
+    return {"message": "Resume deleted successfully"}

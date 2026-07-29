@@ -78,7 +78,8 @@ def get_my_profile(current_user: User = Depends(get_current_user), db: Session =
                 "tenth_percentage": student.tenth_percentage,
                 "twelfth_percentage": student.twelfth_percentage,
                 "current_semester": student.current_semester,
-                "location": student.location
+                "location": student.location,
+                "github_username": student.github_username
             }
             # Fetch projects and certifications
             projects = db.query(Project).filter(Project.student_id == current_user.id).all()
@@ -240,10 +241,12 @@ def sync_github_profile(username: str, current_user: User = Depends(get_current_
     if user and github_data.get("avatar_url"):
         user.profile_image = github_data["avatar_url"]
         
-    # Update Student Profile (location)
+    # Update Student Profile (location & username)
     student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()
-    if student and github_data.get("location"):
-        student.location = github_data["location"]
+    if student:
+        student.github_username = username
+        if github_data.get("location"):
+            student.location = github_data["location"]
         
     db.commit()
         
@@ -326,3 +329,29 @@ def sync_github_profile(username: str, current_user: User = Depends(get_current_
         "repositories_synced": [r["name"] for r in repos],
         "extracted_skills": list(extracted_languages)
     }
+
+@router.post("/github/unlink")
+def unlink_github_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can unlink GitHub profiles")
+        
+    student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()
+    if not student or not student.github_username:
+        raise HTTPException(status_code=400, detail="No GitHub account linked")
+        
+    # Clear username link
+    student.github_username = None
+    
+    # Optional: Delete synced projects & skills
+    db.query(Project).filter(
+        Project.student_id == current_user.id,
+        Project.github_url.like("%github.com%")
+    ).delete(synchronize_session=False)
+    
+    db.query(ExtractedSkill).filter(
+        ExtractedSkill.student_id == current_user.id,
+        ExtractedSkill.source == "GitHub"
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    return {"message": "GitHub account unlinked and portfolio data removed successfully"}

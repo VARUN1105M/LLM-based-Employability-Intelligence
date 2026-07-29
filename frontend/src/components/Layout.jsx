@@ -34,7 +34,7 @@ export default function Layout({ children }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+    <div className="h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col md:flex-row">
       {/* Mobile Menu Bar */}
       <div className="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between z-20">
         <div className="flex items-center space-x-2">
@@ -55,7 +55,7 @@ export default function Layout({ children }) {
       <div
         className={`fixed inset-y-0 left-0 transform ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:relative md:translate-x-0 transition-transform duration-300 ease-in-out bg-slate-900 border-r border-slate-800/80 w-64 flex flex-col justify-between z-30`}
+        } md:sticky md:top-0 md:h-screen md:translate-x-0 transition-transform duration-300 ease-in-out bg-slate-900 border-r border-slate-800/80 w-64 flex flex-col justify-between z-30`}
       >
         <div className="flex flex-col h-full pt-5 pb-4 overflow-y-auto">
           {/* Logo Header */}

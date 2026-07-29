@@ -45,6 +45,7 @@ class StudentProfile(Base):
     twelfth_percentage = Column(Float, nullable=True)
     current_semester = Column(Integer, nullable=True)
     location = Column(String, nullable=True)
+    github_username = Column(String, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="student_profile")

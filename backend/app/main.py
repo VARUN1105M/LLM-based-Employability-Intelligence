@@ -14,6 +14,15 @@ from app.routers import profiles
 # Initialize Database tables
 Base.metadata.create_all(bind=engine)
 
+# Ensure github_username exists in Supabase
+with engine.connect() as conn:
+    try:
+        from sqlalchemy import text
+        conn.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS github_username VARCHAR;"))
+        conn.commit()
+    except Exception as e:
+        print(f"Non-blocking migration notice: {e}")
+
 app = FastAPI(
     title="AI-Powered Student Employability & Career Intelligence Platform",
     description="Backend services for analyzing resumes, student profiles, and generating career recommendations using LLMs, RAG, and ML.",

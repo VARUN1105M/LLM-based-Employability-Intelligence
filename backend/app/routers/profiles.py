@@ -476,6 +476,44 @@ def get_project_github_analysis(project_id: UUID, current_user: User = Depends(g
 
 import os
 from app.routers.resume import extract_text_from_pdf, parse_skills
+from app.config import settings
+
+def upload_file_to_supabase_storage(supabase_url: str, supabase_key: str, bucket_name: str, file_path: str, file_bytes: bytes) -> str:
+    import requests
+    url_base = supabase_url.rstrip("/")
+    bucket_url = f"{url_base}/storage/v1/bucket"
+    headers = {
+        "Authorization": f"Bearer {supabase_key}",
+        "apikey": supabase_key,
+        "Content-Type": "application/json"
+    }
+    
+    # Ensure bucket exists
+    try:
+        check = requests.get(f"{bucket_url}/{bucket_name}", headers=headers, timeout=5)
+        if check.status_code != 200:
+            payload = {"id": bucket_name, "name": bucket_name, "public": True}
+            requests.post(bucket_url, headers=headers, json=payload, timeout=5)
+    except Exception:
+        pass
+        
+    # Upload object
+    upload_url = f"{url_base}/storage/v1/object/{bucket_name}/{file_path}"
+    upload_headers = {
+        "Authorization": f"Bearer {supabase_key}",
+        "apikey": supabase_key,
+        "Content-Type": "application/pdf",
+        "x-upsert": "true"
+    }
+    
+    try:
+        res = requests.post(upload_url, headers=upload_headers, data=file_bytes, timeout=10)
+        if res.status_code in [200, 201]:
+            return f"{url_base}/storage/v1/object/public/{bucket_name}/{file_path}"
+    except Exception as e:
+        print(f"Failed to upload to Supabase: {e}")
+        
+    return ""
 
 @router.post("/resume/upload")
 async def upload_student_resume(
@@ -493,27 +531,38 @@ async def upload_student_resume(
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found")
         
-    # Save the file to uploads/resumes/
-    os.makedirs("uploads/resumes", exist_ok=True)
     filename = f"{current_user.id}.pdf"
-    file_path = os.path.join("uploads/resumes", filename)
+    contents = await file.read()
     
-    try:
-        contents = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(contents)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save resume file: {e}")
+    supabase_url = ""
+    # Try uploading to Supabase Storage Bucket
+    if settings.SUPABASE_URL and settings.SUPABASE_KEY:
+        supabase_url = upload_file_to_supabase_storage(
+            settings.SUPABASE_URL,
+            settings.SUPABASE_KEY,
+            "resumes",
+            filename,
+            contents
+        )
         
-    # Expose as URL path
-    student.resume_url = f"/uploads/resumes/{filename}"
-    
+    if supabase_url:
+        student.resume_url = supabase_url
+    else:
+        # Fallback to local server storage
+        os.makedirs("uploads/resumes", exist_ok=True)
+        file_path = os.path.join("uploads/resumes", filename)
+        try:
+            with open(file_path, "wb") as f:
+                f.write(contents)
+            student.resume_url = f"/uploads/resumes/{filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save resume file locally: {e}")
+            
     # Extract text & skills
     extracted_text = extract_text_from_pdf(contents)
     skills = parse_skills(extracted_text)
     
     # Store extracted skills in Supabase table
-    # Clean old resume skills to avoid duplications if they re-upload
     db.query(ExtractedSkill).filter(
         ExtractedSkill.student_id == current_user.id,
         ExtractedSkill.source == "Resume"

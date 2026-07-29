@@ -11,6 +11,7 @@ import Assessments from './components/Assessments';
 import Roadmap from './components/Roadmap';
 import Chatbot from './components/Chatbot';
 import Profile from './components/Profile';
+import ProjectAnalysis from './components/ProjectAnalysis';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -86,6 +87,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/project/:projectId"
+            element={
+              <ProtectedRoute>
+                <ProjectAnalysis />
               </ProtectedRoute>
             }
           />

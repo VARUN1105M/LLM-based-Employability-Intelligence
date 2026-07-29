@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { User, Award, BookOpen, MapPin, Briefcase, Plus, Trash2, Save, CheckCircle, Unlink } from 'lucide-react';
 
 export default function Profile() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -577,9 +579,20 @@ export default function Profile() {
                 <p className="text-xs text-slate-500 italic">No projects added yet.</p>
               ) : (
                 profile.projects.map((proj) => (
-                  <div key={proj.project_id} className="p-3 rounded-xl bg-slate-950/40 border border-slate-850 flex justify-between items-start">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{proj.title}</p>
+                  <div key={proj.project_id} className="p-3 rounded-xl bg-slate-950/40 border border-slate-850 flex justify-between items-start hover:border-primary-500/40 transition-all duration-200">
+                    <div
+                      className="min-w-0 flex-1 cursor-pointer group pr-2"
+                      onClick={() => navigate(`/project/${proj.project_id}`)}
+                      title="Click to view detailed analysis"
+                    >
+                      <p className="text-sm font-bold text-white truncate group-hover:text-primary-400 transition-colors flex items-center">
+                        {proj.title}
+                        {proj.github_url && (
+                          <span className="ml-1.5 text-[9px] text-primary-400 font-semibold bg-primary-500/10 px-1 py-0.2 rounded border border-primary-500/15">
+                            Analyze
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-slate-500 truncate mt-0.5">{proj.description}</p>
                     </div>
                     <button

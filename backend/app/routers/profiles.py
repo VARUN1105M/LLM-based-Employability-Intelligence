@@ -355,3 +355,120 @@ def unlink_github_profile(current_user: User = Depends(get_current_user), db: Se
     
     db.commit()
     return {"message": "GitHub account unlinked and portfolio data removed successfully"}
+
+import re
+
+def parse_github_url(url: str):
+    if not url:
+        return None, None
+    match = re.search(r"github\.com/([^/]+)/([^/]+)", url)
+    if match:
+        owner = match.group(1)
+        repo = match.group(2)
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        repo = repo.split("?")[0].split("#")[0].strip("/")
+        return owner, repo
+    return None, None
+
+@router.get("/project/{project_id}/analysis")
+def get_project_github_analysis(project_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can analyze project repositories")
+        
+    project = db.query(Project).filter(Project.project_id == project_id, Project.student_id == current_user.id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found or unauthorized")
+        
+    owner, repo = parse_github_url(project.github_url)
+    if not owner or not repo:
+        raise HTTPException(status_code=400, detail="Project does not have a valid GitHub repository URL")
+        
+    headers = {"User-Agent": "fastapi-app"}
+    
+    # 1. Fetch Repo general statistics
+    stats_url = f"https://api.github.com/repos/{owner}/{repo}"
+    try:
+        stats_res = requests.get(stats_url, headers=headers, timeout=5)
+        if stats_res.status_code != 200:
+            raise HTTPException(status_code=stats_res.status_code, detail=f"Failed to fetch stats from GitHub: {stats_res.text}")
+        stats = stats_res.json()
+    except Exception as err:
+        raise HTTPException(status_code=503, detail=f"GitHub API is unreachable: {err}")
+        
+    # 2. Fetch Languages
+    lang_url = f"https://api.github.com/repos/{owner}/{repo}/languages"
+    languages_weight = {}
+    try:
+        lang_res = requests.get(lang_url, headers=headers, timeout=5)
+        if lang_res.status_code == 200:
+            langs = lang_res.json()
+            total_bytes = sum(langs.values())
+            if total_bytes > 0:
+                languages_weight = {k: round((v / total_bytes) * 100, 2) for k, v in langs.items()}
+    except Exception:
+        pass
+        
+    # 3. Fetch Branches
+    branches_url = f"https://api.github.com/repos/{owner}/{repo}/branches"
+    branches = []
+    try:
+        branches_res = requests.get(branches_url, headers=headers, timeout=5)
+        if branches_res.status_code == 200:
+            branches_data = branches_res.json()
+            branches = [b["name"] for b in branches_data]
+    except Exception:
+        pass
+        
+    # 4. Fetch Total Commits (header pagination trick)
+    total_commits = 0
+    commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=1"
+    try:
+        commits_res = requests.get(commits_url, headers=headers, timeout=5)
+        if commits_res.status_code == 200:
+            if "Link" in commits_res.headers:
+                links = commits_res.headers["Link"]
+                for link in links.split(","):
+                    if 'rel="last"' in link:
+                        match = re.search(r"page=(\d+)", link)
+                        if match:
+                            total_commits = int(match.group(1))
+            if total_commits == 0:
+                total_commits = len(commits_res.json())
+    except Exception:
+        pass
+        
+    # 5. Fetch Recent 5 Commits
+    recent_commits = []
+    recent_commits_url = f"https://api.github.com/repos/{owner}/{repo}/commits?per_page=5"
+    try:
+        recent_res = requests.get(recent_commits_url, headers=headers, timeout=5)
+        if recent_res.status_code == 200:
+            recent_data = recent_res.json()
+            for c in recent_data:
+                recent_commits.append({
+                    "sha": c["sha"][:7],
+                    "message": c["commit"]["message"],
+                    "author": c["commit"]["author"]["name"],
+                    "date": c["commit"]["author"]["date"]
+                })
+    except Exception:
+        pass
+        
+    return {
+        "project_title": project.title,
+        "github_url": project.github_url,
+        "owner": owner,
+        "repo": repo,
+        "description": stats.get("description") or project.description,
+        "stars": stats.get("stargazers_count", 0),
+        "forks": stats.get("forks_count", 0),
+        "open_issues": stats.get("open_issues_count", 0),
+        "size_kb": stats.get("size", 0),
+        "default_branch": stats.get("default_branch", "main"),
+        "languages": languages_weight,
+        "total_branches": len(branches),
+        "branch_names": branches,
+        "total_commits": total_commits,
+        "recent_commits": recent_commits
+    }

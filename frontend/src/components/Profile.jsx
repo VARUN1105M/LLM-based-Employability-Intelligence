@@ -26,7 +26,8 @@ export default function Profile() {
       tenth_percentage: 0.0,
       twelfth_percentage: 0.0,
       current_semester: 1,
-      location: ''
+      location: '',
+      resume_url: ''
     },
     mentor_details: {
       company: '',
@@ -75,6 +76,37 @@ export default function Profile() {
       setError(err.response?.data?.detail || 'Failed to unlink GitHub.');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Resume Upload State
+  const [resumeFile, setResumeFile] = useState(null);
+  const [uploadingResume, setUploadingResume] = useState(false);
+
+  const uploadResume = async (e) => {
+    e.preventDefault();
+    if (!resumeFile) return;
+    setUploadingResume(true);
+    setError('');
+    setSuccess(false);
+    
+    const formData = new FormData();
+    formData.append('file', resumeFile);
+    
+    try {
+      await axios.post('http://localhost:8085/api/profiles/resume/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      setSuccess(true);
+      setResumeFile(null);
+      fetchProfile();
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to upload and extract resume details.');
+    } finally {
+      setUploadingResume(false);
     }
   };
 
@@ -354,6 +386,57 @@ export default function Profile() {
                 </div>
               </div>
             )}
+
+            {/* Resume Upload Card */}
+            <div className="bg-gradient-to-r from-slate-900/60 to-slate-950/40 border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
+                  <h4 className="text-sm font-bold text-white flex items-center">
+                    <svg className="h-5 w-5 text-red-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Resume CV Management
+                  </h4>
+                  {profile.student_details?.resume_url ? (
+                    <div className="mt-2 flex items-center space-x-2">
+                      <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        Active Resume Uploaded
+                      </span>
+                      <a
+                        href={`http://localhost:8085${profile.student_details.resume_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary-400 hover:text-primary-300 font-semibold underline"
+                      >
+                        Download PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 mt-1">
+                      Upload your PDF resume to automatically extract your skills and store your document in the database.
+                    </p>
+                  )}
+                </div>
+                <form onSubmit={uploadResume} className="flex items-center space-x-2 shrink-0">
+                  <label className="inline-flex items-center px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer transition-all">
+                    {resumeFile ? resumeFile.name : 'Choose PDF'}
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={(e) => setResumeFile(e.target.files[0])}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={uploadingResume || !resumeFile}
+                    className="px-4 py-2 bg-gradient-to-r from-primary-600 to-indigo-655 hover:from-primary-500 hover:to-indigo-555 disabled:opacity-50 text-xs font-bold rounded-lg text-white transition-colors"
+                  >
+                    {uploadingResume ? 'Processing...' : 'Upload & Extract'}
+                  </button>
+                </form>
+              </div>
+            </div>
 
             <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 space-y-4">
             <h3 className="text-base font-bold text-white flex items-center">

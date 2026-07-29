@@ -46,6 +46,7 @@ class StudentProfile(Base):
     current_semester = Column(Integer, nullable=True)
     location = Column(String, nullable=True)
     github_username = Column(String, nullable=True)
+    resume_url = Column(String, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="student_profile")

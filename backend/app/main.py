@@ -14,14 +14,51 @@ from app.routers import profiles, resume
 # Initialize Database tables
 Base.metadata.create_all(bind=engine)
 
-# Ensure github_username exists in Supabase
+# Ensure columns exist in Supabase and configure RLS Policies
 with engine.connect() as conn:
     try:
         from sqlalchemy import text
+        # Migrations
         conn.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS github_username VARCHAR;"))
+        conn.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS resume_url VARCHAR;"))
+        
+        # Enable RLS
+        conn.execute(text("ALTER TABLE users ENABLE ROW LEVEL SECURITY;"))
+        conn.execute(text("ALTER TABLE student_profiles ENABLE ROW LEVEL SECURITY;"))
+        conn.execute(text("ALTER TABLE mentors ENABLE ROW LEVEL SECURITY;"))
+        conn.execute(text("ALTER TABLE projects ENABLE ROW LEVEL SECURITY;"))
+        conn.execute(text("ALTER TABLE certifications ENABLE ROW LEVEL SECURITY;"))
+        conn.execute(text("ALTER TABLE extracted_skills ENABLE ROW LEVEL SECURITY;"))
+        
+        # Create user policies
+        conn.execute(text("""
+            DROP POLICY IF EXISTS users_self_policy ON users;
+            CREATE POLICY users_self_policy ON users FOR ALL USING (id = auth.uid());
+        """))
+        conn.execute(text("""
+            DROP POLICY IF EXISTS student_profiles_self_policy ON student_profiles;
+            CREATE POLICY student_profiles_self_policy ON student_profiles FOR ALL USING (student_id = auth.uid());
+        """))
+        conn.execute(text("""
+            DROP POLICY IF EXISTS mentors_self_policy ON mentors;
+            CREATE POLICY mentors_self_policy ON mentors FOR ALL USING (user_id = auth.uid());
+        """))
+        conn.execute(text("""
+            DROP POLICY IF EXISTS projects_self_policy ON projects;
+            CREATE POLICY projects_self_policy ON projects FOR ALL USING (student_id = auth.uid());
+        """))
+        conn.execute(text("""
+            DROP POLICY IF EXISTS certifications_self_policy ON certifications;
+            CREATE POLICY certifications_self_policy ON certifications FOR ALL USING (student_id = auth.uid());
+        """))
+        conn.execute(text("""
+            DROP POLICY IF EXISTS extracted_skills_self_policy ON extracted_skills;
+            CREATE POLICY extracted_skills_self_policy ON extracted_skills FOR ALL USING (student_id = auth.uid());
+        """))
+        
         conn.commit()
     except Exception as e:
-        print(f"Non-blocking migration notice: {e}")
+        print(f"Non-blocking migration & RLS notice: {e}")
 
 app = FastAPI(
     title="AI-Powered Student Employability & Career Intelligence Platform",
@@ -31,6 +68,12 @@ app = FastAPI(
 
 app.include_router(profiles.router)
 app.include_router(resume.router)
+
+# Mount static files for resumes
+from fastapi.staticfiles import StaticFiles
+import os
+os.makedirs("uploads/resumes", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS setup for frontend integration
 app.add_middleware(

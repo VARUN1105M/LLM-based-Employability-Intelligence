@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from pydantic import BaseModel
@@ -79,7 +79,8 @@ def get_my_profile(current_user: User = Depends(get_current_user), db: Session =
                 "twelfth_percentage": student.twelfth_percentage,
                 "current_semester": student.current_semester,
                 "location": student.location,
-                "github_username": student.github_username
+                "github_username": student.github_username,
+                "resume_url": student.resume_url
             }
             # Fetch projects and certifications
             projects = db.query(Project).filter(Project.student_id == current_user.id).all()
@@ -471,4 +472,75 @@ def get_project_github_analysis(project_id: UUID, current_user: User = Depends(g
         "branch_names": branches,
         "total_commits": total_commits,
         "recent_commits": recent_commits
+    }
+
+import os
+from app.routers.resume import extract_text_from_pdf, parse_skills
+
+@router.post("/resume/upload")
+async def upload_student_resume(
+    file: UploadFile = File(...), 
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Only students can upload resumes to their profile")
+        
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF format is supported")
+        
+    student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+        
+    # Save the file to uploads/resumes/
+    os.makedirs("uploads/resumes", exist_ok=True)
+    filename = f"{current_user.id}.pdf"
+    file_path = os.path.join("uploads/resumes", filename)
+    
+    try:
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save resume file: {e}")
+        
+    # Expose as URL path
+    student.resume_url = f"/uploads/resumes/{filename}"
+    
+    # Extract text & skills
+    extracted_text = extract_text_from_pdf(contents)
+    skills = parse_skills(extracted_text)
+    
+    # Store extracted skills in Supabase table
+    # Clean old resume skills to avoid duplications if they re-upload
+    db.query(ExtractedSkill).filter(
+        ExtractedSkill.student_id == current_user.id,
+        ExtractedSkill.source == "Resume"
+    ).delete(synchronize_session=False)
+    
+    # Add new skills
+    for skill_name in skills:
+        existing = db.query(ExtractedSkill).filter(
+            ExtractedSkill.student_id == current_user.id,
+            ExtractedSkill.skill_name == skill_name
+        ).first()
+        
+        if not existing:
+            new_skill = ExtractedSkill(
+                student_id=current_user.id,
+                skill_name=skill_name,
+                skill_category="technical",
+                proficiency="Intermediate",
+                source="Resume"
+            )
+            db.add(new_skill)
+            
+    db.commit()
+    db.refresh(student)
+    
+    return {
+        "message": "Resume uploaded and analyzed successfully!",
+        "resume_url": student.resume_url,
+        "skills_extracted": skills
     }

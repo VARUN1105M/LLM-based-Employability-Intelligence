@@ -398,12 +398,12 @@ export default function Profile() {
                     Resume CV Management
                   </h4>
                   {profile.student_details?.resume_url ? (
-                    <div className="mt-2 flex items-center space-x-2">
-                      <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                        Active Resume Uploaded
+                    <div className="mt-2 flex items-center space-x-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <CheckCircle className="h-3 w-3 mr-1 shrink-0" /> Resume Uploaded
                       </span>
                       <a
-                        href={`http://localhost:8085${profile.student_details.resume_url}`}
+                        href={profile.student_details.resume_url.startsWith('http') ? profile.student_details.resume_url : `http://localhost:8085${profile.student_details.resume_url}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-primary-400 hover:text-primary-300 font-semibold underline"

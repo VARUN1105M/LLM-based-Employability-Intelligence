@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Award, Briefcase, ChevronRight, TrendingUp, BookOpen, Clock, AlertTriangle } from 'lucide-react';
+import { Award, Briefcase, ChevronRight, TrendingUp, BookOpen, Clock, AlertTriangle, UploadCloud, FileText, Loader } from 'lucide-react';
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const [data, setData] = useState({
     profile: null,
     skills: [],
@@ -12,54 +14,66 @@ export default function Dashboard() {
     recentActivities: []
   });
 
-  // Mock data for demonstration when backend API isn't fully trained
-  const mockData = {
-    profile: { cgpa: 8.5, department: "Computer Science & Engineering", college_name: "IEEE Engineering College" },
-    skills: [
-      { skill_name: "Python", skill_category: "technical", proficiency: "Advanced" },
-      { skill_name: "React.js", skill_category: "technical", proficiency: "Intermediate" },
-      { skill_name: "SQL", skill_category: "technical", proficiency: "Advanced" },
-      { skill_name: "Communication", skill_category: "soft", proficiency: "Advanced" }
-    ],
-    prediction: {
-      employability_score: 82.5,
-      ability_score: 79.0,
-      predicted_role: "Full Stack Engineer",
-      confidence: 0.88
-    },
-    gaps: [
-      { required_skill: "Docker", current_level: "None", required_level: "Intermediate", gap_percentage: 60 },
-      { required_skill: "Machine Learning", current_level: "Beginner", required_level: "Advanced", gap_percentage: 45 }
-    ],
-    recentActivities: [
-      { id: 1, type: "resume", message: "Resume parsed successfully.", date: "Today, 10:15 AM" },
-      { id: 2, type: "assessment", message: "Completed Logical Aptitude test. Scored 85%.", date: "Yesterday, 2:30 PM" },
-      { id: 3, type: "skill", message: "New skill 'React.js' added from Resume.", date: "2 days ago" }
-    ]
+  const fetchData = async () => {
+    try {
+      const res = await axios.get('http://localhost:8085/api/profiles/me');
+      const profile = res.data;
+      const onboarded = profile.student_details && profile.student_details.resume_url;
+      
+      let activities = [];
+      if (onboarded) {
+        activities = [
+          { id: 1, type: "resume", message: "Resume parsed and student profile synchronized successfully.", date: "Just now" },
+          { id: 2, type: "skill", message: `Extracted ${profile.skills?.length || 0} skills from resume.`, date: "Just now" }
+        ];
+      }
+
+      setData({
+        profile: profile,
+        skills: profile.skills || [],
+        prediction: profile.prediction,
+        gaps: profile.gaps || [],
+        recentActivities: activities
+      });
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const profileRes = await axios.get('http://localhost:8085/api/auth/me');
-        // If profile loaded successfully, try fetching custom predictions, else fallback
-        // We will fallback to mock data since we just initialized the DB
-        setData({
-          ...mockData,
-          profile: { ...mockData.profile, full_name: profileRes.data.full_name }
-        });
-      } catch (err) {
-        console.warn('API connection refused, using mock demo database data.');
-        setData({
-          ...mockData,
-          profile: { ...mockData.profile, full_name: "Student Demo User" }
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setUploadError("Only PDF resume files are supported.");
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      await axios.post('http://localhost:8085/api/profiles/resume/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+      setUploadError(err.response?.data?.detail || "Failed to upload and parse resume. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -69,10 +83,87 @@ export default function Dashboard() {
     );
   }
 
+  const isStudent = data.profile?.role === 'student';
+  const isOnboarded = !isStudent || (data.profile?.student_details && data.profile.student_details.resume_url);
+
+  // If student is not onboarded, render Onboarding Wizard
+  if (!isOnboarded) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-8 py-10">
+        <div className="text-center space-y-4">
+          <div className="inline-flex p-4 bg-primary-500/10 border border-primary-500/20 text-primary-400 rounded-full mb-2">
+            <UploadCloud className="h-10 w-10 animate-bounce" />
+          </div>
+          <h1 className="text-4xl font-extrabold text-white tracking-tight">Onboard Your Student Profile</h1>
+          <p className="text-slate-400 max-w-lg mx-auto text-sm leading-relaxed">
+            Welcome to the AI-Powered Career Intelligence Platform! Upload your professional resume in PDF format to synchronize your skill sets, extract experience logs, and initialize the ATIA career matching engine.
+          </p>
+        </div>
+
+        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl p-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-80 h-80 bg-primary-500/5 rounded-full blur-[80px]" />
+          
+          {uploading ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4 relative z-10">
+              <Loader className="h-12 w-12 text-primary-500 animate-spin" />
+              <p className="text-white font-bold animate-pulse">Parsing Resume Content...</p>
+              <p className="text-xs text-slate-500">Our AI model is extracting skills, education details, and computing readiness scores.</p>
+            </div>
+          ) : (
+            <div className="space-y-6 relative z-10">
+              <div className="border-2 border-dashed border-slate-800 hover:border-primary-500/50 rounded-2xl p-10 text-center cursor-pointer transition-colors relative group bg-slate-950/20">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className="flex flex-col items-center space-y-3">
+                  <FileText className="h-12 w-12 text-slate-500 group-hover:text-primary-400 transition-colors" />
+                  <div className="text-sm font-semibold text-white">
+                    Click to browse or drag and drop your PDF resume
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    PDF files only (max 10MB)
+                  </div>
+                </div>
+              </div>
+
+              {uploadError && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl flex items-start space-x-2">
+                  <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-5 space-y-3 text-xs text-slate-400">
+                <div className="font-bold text-white uppercase tracking-wider text-[10px]">What happens next?</div>
+                <div className="flex items-center space-x-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span>Your full name, phone number, and location will be auto-populated.</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span>Technical skills will be automatically mapped to your dashboard inventory.</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  <span>The ATIA engine will run match models against active roles to calculate your Career Readiness Score.</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Dashboard calculations/destructuring
   const { profile, skills, prediction, gaps, recentActivities } = data;
+  const studentDetails = profile?.student_details || {};
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
+    <div className="space-y-8 max-w-7xl mx-auto animate-fade-in">
       {/* Welcome Banner */}
       <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-primary-900/60 to-indigo-900/40 border border-slate-800 p-6 sm:p-8">
         <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-80 h-80 bg-primary-500/10 rounded-full blur-[80px]" />
@@ -117,13 +208,13 @@ export default function Dashboard() {
               </defs>
             </svg>
             <div className="absolute flex flex-col items-center justify-center">
-              <span className="text-3xl font-black text-white">{prediction?.employability_score}%</span>
+              <span className="text-3xl font-black text-white">{prediction?.employability_score || 0}%</span>
               <span className="text-[10px] text-slate-500 font-bold uppercase mt-1">Excellent</span>
             </div>
           </div>
           <div className="mt-4 text-xs text-slate-400 flex items-center justify-center">
             <TrendingUp className="text-primary-400 h-4 w-4 mr-1" />
-            <span>+2.4% progress this month</span>
+            <span>Profile-based score prediction</span>
           </div>
         </div>
 
@@ -137,7 +228,7 @@ export default function Dashboard() {
                 <Briefcase className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-lg font-bold text-white leading-none">{prediction?.predicted_role}</p>
+                <p className="text-lg font-bold text-white leading-none">{prediction?.predicted_role || 'Not Calculated'}</p>
                 <p className="text-xs text-slate-400 mt-1">ATIA Predicted Match</p>
               </div>
             </div>
@@ -145,12 +236,12 @@ export default function Dashboard() {
           <div className="border-t border-slate-800/80 pt-4 mt-6">
             <div className="flex justify-between text-xs text-slate-400 mb-1">
               <span>Model Confidence</span>
-              <span className="text-white font-bold">{prediction?.confidence * 100}%</span>
+              <span className="text-white font-bold">{Math.round((prediction?.confidence || 0) * 100)}%</span>
             </div>
             <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
               <div
                 className="bg-indigo-500 h-1.5 rounded-full"
-                style={{ width: `${prediction?.confidence * 100}%` }}
+                style={{ width: `${(prediction?.confidence || 0) * 100}%` }}
               />
             </div>
           </div>
@@ -164,16 +255,18 @@ export default function Dashboard() {
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-850">
                 <span className="text-[10px] text-slate-500 font-bold uppercase block">CGPA</span>
-                <span className="text-xl font-bold text-emerald-400 mt-1 block">{profile?.cgpa}</span>
+                <span className="text-xl font-bold text-emerald-400 mt-1 block">{studentDetails.cgpa || 'N/A'}</span>
               </div>
               <div className="bg-slate-950/60 rounded-xl p-3 border border-slate-850">
                 <span className="text-[10px] text-slate-500 font-bold uppercase block">Branch</span>
-                <span className="text-sm font-bold text-white mt-1 block truncate" title={profile?.department}>CSE</span>
+                <span className="text-sm font-bold text-white mt-1 block truncate" title={studentDetails.department || 'N/A'}>
+                  {studentDetails.department ? studentDetails.department.split(' ')[0] : 'N/A'}
+                </span>
               </div>
             </div>
           </div>
           <div className="border-t border-slate-800/80 pt-4 mt-6 flex justify-between items-center text-xs text-slate-400">
-            <span className="truncate">{profile?.college_name}</span>
+            <span className="truncate" title={studentDetails.college_name}>{studentDetails.college_name || 'No institution'}</span>
             <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />
           </div>
         </div>
@@ -194,23 +287,27 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-            {skills.map((skill, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-850 hover:border-slate-800 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="h-2 w-2 rounded-full bg-primary-400" />
-                  <span className="text-sm font-semibold text-white">{skill.skill_name}</span>
+            {skills.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-6">No skills extracted yet.</p>
+            ) : (
+              skills.map((skill, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-850 hover:border-slate-800 transition-colors"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="h-2 w-2 rounded-full bg-primary-400" />
+                    <span className="text-sm font-semibold text-white">{skill.skill_name}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
+                      {skill.skill_category}
+                    </span>
+                    <span className="text-xs font-semibold text-emerald-400">{skill.proficiency}</span>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
-                    {skill.skill_category}
-                  </span>
-                  <span className="text-xs font-semibold text-emerald-400">{skill.proficiency}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -225,25 +322,29 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-4">
-            {gaps.map((gap, index) => (
-              <div key={index} className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <div>
-                    <span className="font-semibold text-white">{gap.required_skill}</span>
-                    <span className="text-xs text-slate-500 ml-2">
-                      (Needed: {gap.required_level} / Have: {gap.current_level})
-                    </span>
+            {gaps.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-6">No skill gap analysis calculated.</p>
+            ) : (
+              gaps.map((gap, index) => (
+                <div key={index} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <div>
+                      <span className="font-semibold text-white">{gap.required_skill}</span>
+                      <span className="text-xs text-slate-500 ml-2">
+                        (Needed: {gap.required_level} / Have: {gap.current_level})
+                      </span>
+                    </div>
+                    <span className="text-xs text-amber-400 font-bold">{gap.gap_percentage}% Gap</span>
                   </div>
-                  <span className="text-xs text-amber-400 font-bold">{gap.gap_percentage}% Gap</span>
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-amber-500 to-red-500 h-2 rounded-full"
+                      style={{ width: `${gap.gap_percentage}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-amber-500 to-red-500 h-2 rounded-full"
-                    style={{ width: `${gap.gap_percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

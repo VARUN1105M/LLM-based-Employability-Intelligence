@@ -4,11 +4,13 @@ import os
 # Add parent directory to path so we can import app
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from app.database import SessionLocal
+from app.database import SessionLocal, engine, Base
 from app.models import User, StudentProfile, Mentor
 from app.security import get_password_hash
 
 def seed():
+    print("Creating database tables if they do not exist...")
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         # Check if users already exist

@@ -12,6 +12,8 @@ import Roadmap from './components/Roadmap';
 import Chatbot from './components/Chatbot';
 import Profile from './components/Profile';
 import ProjectAnalysis from './components/ProjectAnalysis';
+import JobSearch from './components/JobSearch';
+import ProjectSearch from './components/ProjectSearch';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -95,6 +97,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ProjectAnalysis />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <ProtectedRoute>
+                <JobSearch />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects-search"
+            element={
+              <ProtectedRoute>
+                <ProjectSearch />
               </ProtectedRoute>
             }
           />

@@ -9,6 +9,8 @@ import {
   MessageSquare,
   LogOut,
   User as UserIcon,
+  Briefcase,
+  FolderGit2,
   Menu,
   X
 } from 'lucide-react';
@@ -21,6 +23,8 @@ export default function Layout({ children }) {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Job Search', href: '/jobs', icon: Briefcase },
+    { name: 'Project Search', href: '/projects-search', icon: FolderGit2 },
     { name: 'Resume Analyzer', href: '/resume', icon: FileText },
     { name: 'Assessments', href: '/assessments', icon: CheckSquare },
     { name: 'Roadmap', href: '/roadmap', icon: Map },

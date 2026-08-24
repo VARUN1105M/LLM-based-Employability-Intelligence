@@ -281,3 +281,21 @@ class KnowledgeBaseMetadata(Base):
     content = Column(Text, nullable=False)
     source = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class JobBookmark(Base):
+    __tablename__ = "job_bookmarks"
+
+    bookmark_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False)
+    status = Column(String, default="Saved") # Saved, Applied, Interviewing
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ProjectBookmark(Base):
+    __tablename__ = "project_bookmarks"
+
+    bookmark_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.database import get_db
-from app.models import User, StudentProfile, Project, Job, ExtractedSkill
+from app.models import User, StudentProfile, Project, Job, ExtractedSkill, JobBookmark, ProjectBookmark
 from app.dependencies import get_current_user
 
 router = APIRouter(
@@ -282,3 +282,124 @@ def search_projects(
         "total_projects": len(project_list),
         "projects": project_list
     }
+
+@router.post("/jobs/{job_id}/bookmark")
+def toggle_job_bookmark(job_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    existing = db.query(JobBookmark).filter(
+        JobBookmark.student_id == current_user.id,
+        JobBookmark.job_id == job_id
+    ).first()
+    
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return {"message": "Job removed from saved bookmarks", "bookmarked": False}
+    else:
+        new_bookmark = JobBookmark(student_id=current_user.id, job_id=job_id, status="Saved")
+        db.add(new_bookmark)
+        db.commit()
+        return {"message": "Job saved to bookmarks", "bookmarked": True}
+
+@router.get("/jobs/bookmarks/me")
+def get_my_bookmarked_jobs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    bookmarks = db.query(JobBookmark).filter(JobBookmark.student_id == current_user.id).all()
+    job_ids = [b.job_id for b in bookmarks]
+    jobs = db.query(Job).filter(Job.job_id.in_(job_ids)).all() if job_ids else []
+    
+    return {
+        "bookmarked_jobs": [
+            {
+                "job_id": j.job_id,
+                "company": j.company,
+                "title": j.title,
+                "location": j.location,
+                "salary": j.salary,
+                "employment_type": j.employment_type,
+                "apply_url": j.apply_url
+            } for j in jobs
+        ]
+    }
+
+@router.post("/projects/{project_id}/bookmark")
+def toggle_project_bookmark(project_id: UUID, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    existing = db.query(ProjectBookmark).filter(
+        ProjectBookmark.student_id == current_user.id,
+        ProjectBookmark.project_id == project_id
+    ).first()
+    
+    if existing:
+        db.delete(existing)
+        db.commit()
+        return {"message": "Project removed from bookmarks", "bookmarked": False}
+    else:
+        new_bookmark = ProjectBookmark(student_id=current_user.id, project_id=project_id)
+        db.add(new_bookmark)
+        db.commit()
+        return {"message": "Project bookmarked", "bookmarked": True}
+
+@router.get("/projects/bookmarks/me")
+def get_my_bookmarked_projects(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    bookmarks = db.query(ProjectBookmark).filter(ProjectBookmark.student_id == current_user.id).all()
+    project_ids = [b.project_id for b in bookmarks]
+    projects = db.query(Project).filter(Project.project_id.in_(project_ids)).all() if project_ids else []
+    
+    return {
+        "bookmarked_projects": [
+            {
+                "project_id": p.project_id,
+                "title": p.title,
+                "description": p.description,
+                "github_url": p.github_url,
+                "technologies": (p.technologies or "").split(",")
+            } for p in projects
+        ]
+    }
+
+@router.get("/dashboard/recommendations")
+def get_dashboard_recommendations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    seed_default_jobs_if_empty(db)
+    seed_default_projects_if_empty(db, current_user.id)
+    
+    # User skills
+    user_skills = set()
+    if current_user.role == "student":
+        skills_db = db.query(ExtractedSkill).filter(ExtractedSkill.student_id == current_user.id).all()
+        user_skills = {s.skill_name.lower().strip() for s in skills_db}
+        
+    jobs = db.query(Job).limit(6).all()
+    top_jobs = []
+    for job in jobs:
+        required = [s.strip() for s in (job.skills or "").split(",") if s.strip()]
+        matched = [r for r in required if r.lower() in user_skills or any(us in r.lower() for us in user_skills)]
+        match_score = round((len(matched) / max(len(required), 1)) * 100) if required else 75
+        if not user_skills:
+            match_score = 70
+        top_jobs.append({
+            "job_id": job.job_id,
+            "title": job.title,
+            "company": job.company,
+            "location": job.location,
+            "salary": job.salary,
+            "employment_type": job.employment_type,
+            "apply_url": job.apply_url,
+            "match_score": min(match_score, 100)
+        })
+        
+    top_jobs.sort(key=lambda x: x["match_score"], reverse=True)
+    
+    projects = db.query(Project).limit(4).all()
+    top_projects = [
+        {
+            "project_id": p.project_id,
+            "title": p.title,
+            "description": p.description,
+            "technologies": [t.strip() for t in (p.technologies or "").split(",") if t.strip()],
+            "github_url": p.github_url
+        } for p in projects
+    ]
+    
+    return {
+        "top_job_recommendations": top_jobs[:3],
+        "featured_projects": top_projects
+    }
+

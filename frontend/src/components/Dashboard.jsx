@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Award, Briefcase, ChevronRight, TrendingUp, BookOpen, Clock, AlertTriangle, UploadCloud, FileText, Loader } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Award, Briefcase, ChevronRight, TrendingUp, BookOpen, Clock, AlertTriangle, UploadCloud, FileText, Loader, Sparkles, ExternalLink, FolderGit2 } from 'lucide-react';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [recommendations, setRecommendations] = useState({ top_job_recommendations: [], featured_projects: [] });
   const [data, setData] = useState({
     profile: null,
     skills: [],
@@ -35,6 +38,14 @@ export default function Dashboard() {
         gaps: profile.gaps || [],
         recentActivities: activities
       });
+
+      // Fetch job & project recommendations
+      try {
+        const recRes = await axios.get('http://localhost:8085/api/dashboard/recommendations');
+        setRecommendations(recRes.data || { top_job_recommendations: [], featured_projects: [] });
+      } catch (e) {
+        console.error('Failed to fetch recommendations:', e);
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -342,6 +353,90 @@ export default function Dashboard() {
                       style={{ width: `${gap.gap_percentage}%` }}
                     />
                   </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Recommended Jobs & Featured Projects Quick Access Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Matched Jobs */}
+        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="text-primary-400 h-5 w-5" />
+              <h3 className="text-base font-bold text-white">Recommended Job Matches</h3>
+            </div>
+            <button
+              onClick={() => navigate('/jobs')}
+              className="text-xs text-primary-400 hover:text-primary-300 font-semibold flex items-center"
+            >
+              Explore All <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {recommendations.top_job_recommendations.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-4 text-center">No job recommendations available.</p>
+            ) : (
+              recommendations.top_job_recommendations.map((job) => (
+                <div
+                  key={job.job_id}
+                  onClick={() => navigate('/jobs')}
+                  className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-850 hover:border-primary-500/40 flex items-center justify-between transition-all cursor-pointer group"
+                >
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-500">{job.company}</span>
+                    <h4 className="text-sm font-bold text-white group-hover:text-primary-400 transition-colors">
+                      {job.title}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{job.location} • {job.salary}</p>
+                  </div>
+                  <div className="shrink-0 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {job.match_score}% Match
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Featured Projects */}
+        <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <FolderGit2 className="text-indigo-400 h-5 w-5" />
+              <h3 className="text-base font-bold text-white">Showcase Projects</h3>
+            </div>
+            <button
+              onClick={() => navigate('/projects-search')}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center"
+            >
+              Search Catalog <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {recommendations.featured_projects.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-4 text-center">No projects available.</p>
+            ) : (
+              recommendations.featured_projects.map((proj) => (
+                <div
+                  key={proj.project_id}
+                  onClick={() => navigate('/projects-search')}
+                  className="p-3.5 rounded-xl bg-slate-950/40 border border-slate-850 hover:border-indigo-500/40 flex items-center justify-between transition-all cursor-pointer group"
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <h4 className="text-sm font-bold text-white group-hover:text-indigo-400 transition-colors truncate">
+                      {proj.title}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 truncate mt-0.5">{proj.description}</p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-semibold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                    {proj.technologies?.[0] || 'Code'}
+                  </span>
                 </div>
               ))
             )}

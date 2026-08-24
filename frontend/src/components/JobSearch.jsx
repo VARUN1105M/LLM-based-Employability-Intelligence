@@ -13,6 +13,8 @@ import {
   CheckCircle,
   Building,
   ChevronRight,
+  Bookmark,
+  BookmarkCheck,
   X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 export default function JobSearch() {
   const { user } = useAuth();
   const [jobs, setJobs] = useState([]);
+  const [bookmarkedJobs, setBookmarkedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -67,8 +70,33 @@ export default function JobSearch() {
     }
   };
 
+  const fetchBookmarks = async () => {
+    try {
+      const res = await axios.get('http://localhost:8085/api/jobs/bookmarks/me');
+      const ids = (res.data.bookmarked_jobs || []).map(b => b.job_id);
+      setBookmarkedJobs(ids);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const toggleBookmark = async (jobId, e) => {
+    e.stopPropagation();
+    try {
+      const res = await axios.post(`http://localhost:8085/api/jobs/${jobId}/bookmark`);
+      if (res.data.bookmarked) {
+        setBookmarkedJobs(prev => [...prev, jobId]);
+      } else {
+        setBookmarkedJobs(prev => prev.filter(id => id !== jobId));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchJobs();
+    fetchBookmarks();
   }, [selectedType]);
 
   const handleSearchSubmit = (e) => {
@@ -265,19 +293,35 @@ export default function JobSearch() {
                       </h3>
                     </div>
                   </div>
-                  {/* Match score badge */}
-                  <div
-                    className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center border ${
-                      job.match_score >= 80
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : job.match_score >= 50
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}
-                    title={`${job.match_score}% skill alignment based on your profile`}
-                  >
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    {job.match_score}% Match
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <button
+                      onClick={(e) => toggleBookmark(job.job_id, e)}
+                      className={`p-1.5 rounded-lg border transition-all ${
+                        bookmarkedJobs.includes(job.job_id)
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                          : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-white'
+                      }`}
+                      title={bookmarkedJobs.includes(job.job_id) ? 'Saved to bookmarks' : 'Save job'}
+                    >
+                      {bookmarkedJobs.includes(job.job_id) ? (
+                        <BookmarkCheck className="h-4 w-4" />
+                      ) : (
+                        <Bookmark className="h-4 w-4" />
+                      )}
+                    </button>
+                    <div
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-extrabold flex items-center border ${
+                        job.match_score >= 80
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : job.match_score >= 50
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                      title={`${job.match_score}% skill alignment based on your profile`}
+                    >
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      {job.match_score}% Match
+                    </div>
                   </div>
                 </div>
 

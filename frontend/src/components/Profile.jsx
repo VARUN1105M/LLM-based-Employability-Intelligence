@@ -47,18 +47,37 @@ export default function Profile() {
   const [githubUsername, setGithubUsername] = useState('');
   const [syncing, setSyncing] = useState(false);
 
+  const getErrorMessage = (err, fallback) => {
+    const detail = err.response?.data?.detail;
+    if (typeof detail === 'string') {
+      try {
+        const parsed = JSON.parse(detail);
+        if (parsed && typeof parsed === 'object' && parsed.message) {
+          return parsed.message;
+        }
+      } catch (e) {
+        // detail is a standard string
+      }
+      return detail;
+    }
+    if (detail && typeof detail === 'object' && detail.message) {
+      return detail.message;
+    }
+    return fallback;
+  };
+
   const syncGithub = async () => {
     if (!githubUsername.trim()) return;
     setSyncing(true);
     setError('');
     setSuccess(false);
     try {
-      await axios.post(`http://localhost:8085/api/profiles/github/sync?username=${githubUsername}`);
+      await axios.post(`http://localhost:8085/api/profiles/github/sync?username=${encodeURIComponent(githubUsername.trim())}`);
       setSuccess(true);
       fetchProfile();
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Failed to sync with GitHub.');
+      setError(getErrorMessage(err, 'Failed to sync with GitHub. Please check username and try again.'));
     } finally {
       setSyncing(false);
     }
@@ -73,7 +92,7 @@ export default function Profile() {
       fetchProfile();
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Failed to unlink GitHub.');
+      setError(getErrorMessage(err, 'Failed to unlink GitHub.'));
     } finally {
       setSyncing(false);
     }

@@ -258,7 +258,26 @@ def sync_github_profile(username: str, current_user: User = Depends(get_current_
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can sync GitHub profiles")
         
+    import os
+    
+    # Clean username (handles leading/trailing whitespace, @ prefix, and full profile URLs)
+    username = username.strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="GitHub username cannot be empty.")
+        
+    if "github.com/" in username:
+        username = username.split("github.com/")[-1].strip("/")
+        username = username.split("?")[0].split("/")[0].strip()
+    elif username.startswith("@"):
+        username = username[1:]
+        
+    if not username:
+        raise HTTPException(status_code=400, detail="Invalid GitHub username provided.")
+        
     headers = {"User-Agent": "fastapi-app"}
+    github_token = os.getenv("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
     
     # 1. Fetch GitHub User Profile
     user_url = f"https://api.github.com/users/{username}"
@@ -268,7 +287,26 @@ def sync_github_profile(username: str, current_user: User = Depends(get_current_
         raise HTTPException(status_code=503, detail=f"GitHub API is unreachable: {err}")
         
     if user_res.status_code != 200:
-        raise HTTPException(status_code=user_res.status_code, detail=f"Failed to fetch GitHub profile: {user_res.text}")
+        if user_res.status_code == 404:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"GitHub username '{username}' was not found. Please verify the username and try again."
+            )
+        elif user_res.status_code == 403:
+            limit_remaining = user_res.headers.get("X-RateLimit-Remaining")
+            if limit_remaining == "0":
+                raise HTTPException(
+                    status_code=429,
+                    detail="GitHub API rate limit exceeded. Please try again later or configure a GITHUB_TOKEN."
+                )
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access to GitHub profile was forbidden (403): {user_res.text}"
+            )
+        raise HTTPException(
+            status_code=user_res.status_code, 
+            detail=f"Failed to fetch GitHub profile: {user_res.text}"
+        )
         
     github_data = user_res.json()
     
@@ -294,7 +332,17 @@ def sync_github_profile(username: str, current_user: User = Depends(get_current_
         raise HTTPException(status_code=503, detail=f"GitHub API is unreachable: {err}")
         
     if repos_res.status_code != 200:
-        raise HTTPException(status_code=repos_res.status_code, detail="Failed to fetch GitHub repositories")
+        if repos_res.status_code == 403:
+            limit_remaining = repos_res.headers.get("X-RateLimit-Remaining")
+            if limit_remaining == "0":
+                raise HTTPException(
+                    status_code=429,
+                    detail="GitHub API rate limit exceeded while fetching repositories. Please try again later."
+                )
+        raise HTTPException(
+            status_code=repos_res.status_code, 
+            detail=f"Failed to fetch GitHub repositories: {repos_res.text}"
+        )
         
     repos = repos_res.json()
     extracted_languages = set()

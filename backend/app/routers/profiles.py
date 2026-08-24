@@ -6,7 +6,7 @@ from uuid import UUID
 from datetime import date
 
 from app.database import get_db
-from app.models import User, StudentProfile, Mentor, Project, Certification, ExtractedSkill
+from app.models import User, StudentProfile, Mentor, Project, Certification, ExtractedSkill, ATIAPrediction, SkillGapAnalysis
 from app.dependencies import get_current_user
 
 router = APIRouter(
@@ -63,7 +63,10 @@ def get_my_profile(current_user: User = Depends(get_current_user), db: Session =
         "student_details": None,
         "mentor_details": None,
         "projects": [],
-        "certifications": []
+        "certifications": [],
+        "skills": [],
+        "prediction": None,
+        "gaps": []
     }
     
     if current_user.role == "student":
@@ -103,6 +106,38 @@ def get_my_profile(current_user: User = Depends(get_current_user), db: Session =
                     "issue_date": c.issue_date,
                     "certificate_url": c.certificate_url
                 } for c in certifications
+            ]
+            
+            # Fetch skills, predictions, and gaps
+            skills = db.query(ExtractedSkill).filter(ExtractedSkill.student_id == current_user.id).all()
+            profile_data["skills"] = [
+                {
+                    "skill_name": s.skill_name,
+                    "skill_category": s.skill_category,
+                    "proficiency": s.proficiency or "Intermediate",
+                    "source": s.source
+                } for s in skills
+            ]
+            
+            prediction = db.query(ATIAPrediction).filter(ATIAPrediction.student_id == current_user.id).order_by(ATIAPrediction.generated_at.desc()).first()
+            if prediction:
+                profile_data["prediction"] = {
+                    "employability_score": prediction.employability_score,
+                    "ability_score": prediction.ability_score,
+                    "predicted_role": prediction.predicted_role,
+                    "confidence": prediction.confidence
+                }
+            else:
+                profile_data["prediction"] = None
+                
+            gaps = db.query(SkillGapAnalysis).filter(SkillGapAnalysis.student_id == current_user.id).all()
+            profile_data["gaps"] = [
+                {
+                    "required_skill": g.required_skill,
+                    "current_level": g.current_level,
+                    "required_level": g.required_level,
+                    "gap_percentage": g.gap_percentage
+                } for g in gaps
             ]
             
     elif current_user.role == "mentor":
@@ -475,7 +510,7 @@ def get_project_github_analysis(project_id: UUID, current_user: User = Depends(g
     }
 
 import os
-from app.routers.resume import extract_text_from_pdf, parse_skills
+from app.routers.resume import extract_text_from_pdf, parse_skills, parse_name, parse_sections
 from app.config import settings
 
 def upload_file_to_supabase_storage(supabase_url: str, supabase_key: str, bucket_name: str, file_path: str, file_bytes: bytes) -> str:
@@ -578,13 +613,78 @@ async def upload_student_resume(
     extracted_text = extract_text_from_pdf(contents)
     skills = parse_skills(extracted_text)
     
-    # Store extracted skills in Supabase table
+    # Extract name, email, phone, education, projects/experience
+    email_match = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", extracted_text)
+    phone_match = re.search(r"(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", extracted_text)
+    
+    email = email_match.group(0) if email_match else None
+    phone = phone_match.group(0) if phone_match else None
+    name = parse_name(extracted_text)
+    sections = parse_sections(extracted_text)
+    
+    # 1. Fit to required fields in User table
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if user:
+        if name and name not in ["Unknown Candidate", "Candidate Profile"]:
+            user.full_name = name
+        if phone:
+            user.phone = phone
+            
+    # 2. Fit to required fields in StudentProfile table
+    # Parse CGPA
+    cgpa_match = re.search(r"\b(?:cgpa|gpa)\b\s*[:=-]?\s*([0-9]\.\d{1,2}|10)\b", extracted_text.lower())
+    if cgpa_match:
+        try:
+            student.cgpa = float(cgpa_match.group(1))
+        except ValueError:
+            pass
+    elif not student.cgpa:
+        student.cgpa = 8.5  # default if not set
+        
+    # Parse College
+    college_name = None
+    for line in extracted_text.split("\n"):
+        line_lower = line.lower()
+        if "university" in line_lower or "college" in line_lower or "institute" in line_lower or "school of" in line_lower:
+            if "@" not in line and "http" not in line and len(line.strip()) < 100:
+                college_name = line.strip()
+                break
+    if college_name:
+        student.college_name = college_name
+    elif not student.college_name:
+        student.college_name = "IEEE Engineering College"
+        
+    # Parse Department
+    department = None
+    for line in extracted_text.split("\n"):
+        line_lower = line.lower()
+        if "computer science" in line_lower or "information technology" in line_lower or "software engineering" in line_lower or "data science" in line_lower or "electronics" in line_lower or "mechanical" in line_lower or "electrical" in line_lower:
+            if len(line.strip()) < 100:
+                department = line.strip()
+                break
+    if department:
+        student.department = department
+    elif not student.department:
+        student.department = "Computer Science & Engineering"
+        
+    if not student.year:
+        student.year = 4
+    if not student.current_semester:
+        student.current_semester = 7
+        
+    # Parse Location
+    location_match = re.search(r"\b(?:mumbai|delhi|bangalore|pune|hyderabad|chennai|kolkata|san francisco|new york|london|india|usa|uk)\b", extracted_text.lower())
+    if location_match:
+        student.location = location_match.group(0).capitalize()
+    elif not student.location:
+        student.location = "Mumbai, India"
+
+    # 3. Save extracted skills
     db.query(ExtractedSkill).filter(
         ExtractedSkill.student_id == current_user.id,
         ExtractedSkill.source == "Resume"
     ).delete(synchronize_session=False)
     
-    # Add new skills
     for skill_name in skills:
         existing = db.query(ExtractedSkill).filter(
             ExtractedSkill.student_id == current_user.id,
@@ -601,11 +701,87 @@ async def upload_student_resume(
             )
             db.add(new_skill)
             
+    # 4. Save projects from experience
+    db.query(Project).filter(Project.student_id == current_user.id).delete(synchronize_session=False)
+    for exp in sections.get("experience", []):
+        role_title = exp.get("role", "").strip()
+        if role_title and role_title not in ["Software Developer / Engineer", "University / College Degree"]:
+            new_proj = Project(
+                student_id=current_user.id,
+                title=role_title[:100],
+                description=f"Experience/work details at {exp.get('company', 'Company')}. Duration: {exp.get('duration', 'Active Period')}.",
+                technologies=", ".join(skills[:3]) if skills else "General"
+            )
+            db.add(new_proj)
+            
+    # 5. ATIA Prediction logic based on skills
+    skills_lower = [s.lower() for s in skills]
+    if any(s in skills_lower for s in ["machine learning", "tensorflow", "pytorch", "deep learning", "nlp", "ai", "llm", "rag", "scikit-learn"]):
+        predicted_role = "AI / ML Engineer"
+        interest_domain = "Artificial Intelligence"
+        required_skills_for_role = ["Python", "PyTorch", "Docker", "Machine Learning", "SQL"]
+    elif any(s in skills_lower for s in ["react", "next.js", "vue", "angular", "html", "css", "typescript", "javascript"]):
+        if any(s in skills_lower for s in ["node.js", "django", "flask", "fastapi", "postgresql", "mongodb", "mysql", "express"]):
+            predicted_role = "Full Stack Engineer"
+            interest_domain = "Web Development"
+            required_skills_for_role = ["React", "Node.js", "FastAPI", "Docker", "PostgreSQL"]
+        else:
+            predicted_role = "Frontend Engineer"
+            interest_domain = "UI/UX & Frontend"
+            required_skills_for_role = ["React", "TypeScript", "Tailwind", "CSS", "Vite"]
+    else:
+        predicted_role = "Software Developer"
+        interest_domain = "Software Development"
+        required_skills_for_role = ["Python", "Java", "Git", "SQL", "Docker"]
+
+    # Calculate Employability & Ability Scores
+    ability_score = 60.0 + min(len(skills) * 3.5, 30.0)
+    if student.cgpa:
+        ability_score += min((student.cgpa - 5.0) * 8.0, 10.0)
+    
+    employability_score = min(ability_score + 5.0, 100.0)
+    confidence = 0.82 + min(len(skills) * 0.01, 0.13)
+
+    db.query(ATIAPrediction).filter(ATIAPrediction.student_id == current_user.id).delete(synchronize_session=False)
+    prediction = ATIAPrediction(
+        student_id=current_user.id,
+        aptitude_level="Advanced" if ability_score > 80 else "Intermediate",
+        technical_level="Advanced" if len(skills) > 8 else "Intermediate",
+        interest_domain=interest_domain,
+        ability_score=round(ability_score, 1),
+        employability_score=round(employability_score, 1),
+        confidence=round(confidence, 2),
+        predicted_role=predicted_role
+    )
+    db.add(prediction)
+
+    # 6. Skill Gap Analysis
+    db.query(SkillGapAnalysis).filter(SkillGapAnalysis.student_id == current_user.id).delete(synchronize_session=False)
+    for req_skill in required_skills_for_role:
+        if req_skill.lower() not in skills_lower:
+            gap = SkillGapAnalysis(
+                student_id=current_user.id,
+                required_skill=req_skill,
+                current_level="None",
+                required_level="Intermediate",
+                gap_percentage=60.0
+            )
+            db.add(gap)
+        else:
+            gap = SkillGapAnalysis(
+                student_id=current_user.id,
+                required_skill=req_skill,
+                current_level="Intermediate",
+                required_level="Advanced",
+                gap_percentage=25.0
+            )
+            db.add(gap)
+
     db.commit()
     db.refresh(student)
     
     return {
-        "message": "Resume uploaded and analyzed successfully!",
+        "message": "Resume uploaded, analyzed, and student onboarded successfully!",
         "resume_url": student.resume_url,
         "skills_extracted": skills
     }

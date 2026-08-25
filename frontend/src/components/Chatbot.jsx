@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import { Send, Bot, User, HelpCircle, MessageSquare } from 'lucide-react';
 
 export default function Chatbot() {
@@ -19,7 +20,7 @@ export default function Chatbot() {
     "Give me advice on optimizing my resume."
   ];
 
-  const handleSend = (textToSend) => {
+  const handleSend = async (textToSend) => {
     if (!textToSend.trim()) return;
     
     const userMsg = {
@@ -32,25 +33,30 @@ export default function Chatbot() {
     setInput('');
     setSubmitting(true);
 
-    // Simulate RAG + LLM response
-    setTimeout(() => {
-      let botResponse = "I have scanned the local knowledge base and found matching resources. Based on industry demand for Full Stack Engineers, I recommend learning containerization via Docker. You can follow our roadmap step 4, which links to official documentation.";
+    try {
+      const response = await axios.post('http://localhost:8085/api/chatbot/query', {
+        message: textToSend
+      });
       
-      if (textToSend.toLowerCase().includes('resume')) {
-        botResponse = "To optimize your resume for applicant tracking systems, focus on standardizing your headings (e.g., 'Work Experience' instead of 'Professional History') and list concrete details like programming languages and projects with GitHub links.";
-      } else if (textToSend.toLowerCase().includes('certificate')) {
-        botResponse = "For Full Stack roles, key certifications include: AWS Certified Developer, HashiCorp Certified: Terraform Associate, and specialized certificates in database administration.";
-      }
-
       const botMsg = {
         id: Date.now() + 1,
         sender: 'bot',
-        text: botResponse
+        text: response.data.response,
+        sources: response.data.sources || []
       };
-
+      
       setMessages((prev) => [...prev, botMsg]);
+    } catch (err) {
+      console.error(err);
+      const errorMsg = {
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: "Sorry, I am having trouble connecting to the career knowledge advisor right now. Please verify that the backend services are running."
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
       setSubmitting(false);
-    }, 1500);
+    }
   };
 
   useEffect(() => {
@@ -92,10 +98,15 @@ export default function Chatbot() {
               className={`max-w-[75%] rounded-2xl p-4 text-sm leading-relaxed border ${
                 msg.sender === 'user'
                   ? 'bg-gradient-to-tr from-primary-600 to-indigo-600 border-primary-500/20 text-white rounded-tr-none'
-                  : 'bg-slate-950/60 border-slate-850 text-slate-205 rounded-tl-none'
+                  : 'bg-slate-950/60 border-slate-850 text-slate-200 rounded-tl-none'
               }`}
             >
               {msg.text}
+              {msg.sources && msg.sources.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-800/40 text-[10px] text-slate-500 font-semibold">
+                  Sources: {msg.sources.join(', ')}
+                </div>
+              )}
             </div>
 
             {msg.sender === 'user' && (

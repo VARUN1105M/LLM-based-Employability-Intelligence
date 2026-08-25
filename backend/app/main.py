@@ -9,7 +9,7 @@ from app.database import engine, Base, get_db
 from app.models import User, StudentProfile, Mentor
 from app.schemas import UserCreate, UserLogin, Token, UserResponse
 from app.security import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
-from app.routers import profiles, resume, jobs
+from app.routers import profiles, resume, chatbot, jobs
 
 # Initialize Database tables
 Base.metadata.create_all(bind=engine)
@@ -68,6 +68,7 @@ app = FastAPI(
 
 app.include_router(profiles.router)
 app.include_router(resume.router)
+app.include_router(chatbot.router)
 app.include_router(jobs.router)
 
 # Mount static files for resumes

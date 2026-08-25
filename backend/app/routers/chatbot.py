@@ -174,3 +174,36 @@ async def query_career_advisor(
         )
 
     return QueryResponse(response=response_text, sources=sources)
+
+@router.get("/status")
+async def get_chatbot_status():
+    # 1. Check Ollama tags endpoint
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get("http://localhost:11434/api/tags", timeout=1.5)
+            if res.status_code == 200:
+                models = res.json().get("models", [])
+                if models:
+                    return {
+                        "status": "connected",
+                        "provider": "ollama",
+                        "model": models[0]["name"]
+                    }
+    except Exception:
+        pass
+
+    # 2. Check OpenAI
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if openai_key:
+        return {
+            "status": "connected",
+            "provider": "openai",
+            "model": "gpt-4o-mini"
+        }
+
+    # 3. Fallback Standby
+    return {
+        "status": "standby",
+        "provider": "local_vector_fallback",
+        "model": "ONNX-MiniLM"
+    }

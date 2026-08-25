@@ -13,6 +13,27 @@ export default function Chatbot() {
   const [input, setInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const chatEndRef = useRef(null);
+  const [status, setStatus] = useState({
+    status: 'checking',
+    provider: '',
+    model: ''
+  });
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const res = await axios.get('http://localhost:8085/api/chatbot/status');
+        setStatus(res.data);
+      } catch (err) {
+        setStatus({
+          status: 'offline',
+          provider: 'offline',
+          model: ''
+        });
+      }
+    };
+    fetchStatus();
+  }, []);
 
   const predefinedQuestions = [
     "How can I bridge my Docker skill gap?",
@@ -79,10 +100,35 @@ export default function Chatbot() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-white leading-none">AI Career Counselor</h3>
-            <span className="text-[10px] text-emerald-400 font-semibold flex items-center mt-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
-              Llama 3.1 + RAG Connected
-            </span>
+            {status.status === 'connected' && status.provider === 'ollama' && (
+              <span className="text-[10px] text-emerald-400 font-semibold flex items-center mt-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
+                Ollama ({status.model}) + RAG Connected
+              </span>
+            )}
+            {status.status === 'connected' && status.provider === 'openai' && (
+              <span className="text-[10px] text-indigo-400 font-semibold flex items-center mt-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 mr-1.5 animate-pulse" />
+                OpenAI (gpt-4o-mini) + RAG Connected
+              </span>
+            )}
+            {status.status === 'standby' && (
+              <span className="text-[10px] text-amber-400 font-semibold flex items-center mt-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mr-1.5 animate-pulse" />
+                Local Standby Mode (Vector Search)
+              </span>
+            )}
+            {status.status === 'checking' && (
+              <span className="text-[10px] text-slate-400 font-semibold flex items-center mt-1 animate-pulse">
+                Checking LLM Connection...
+              </span>
+            )}
+            {status.status === 'offline' && (
+              <span className="text-[10px] text-rose-400 font-semibold flex items-center mt-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 mr-1.5" />
+                API Connection Offline
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -36,9 +36,11 @@ export default function Chatbot() {
   }, []);
 
   const predefinedQuestions = [
-    "How can I bridge my Docker skill gap?",
-    "What certificates do recruiters look for in Full Stack Engineering?",
-    "Give me advice on optimizing my resume."
+    "Analyze my resume and tell me what skills I am missing.",
+    "I want to become an AI Engineer. What should I learn?",
+    "Why should I learn Docker and bridge my active skill gaps?",
+    "Generate a personalized learning plan for my target career role.",
+    "Give me interview questions and sample answers for a Python developer."
   ];
 
   const handleSend = async (textToSend) => {
@@ -99,7 +101,12 @@ export default function Chatbot() {
             <Bot className="h-6 w-6" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white leading-none">AI Career Counselor</h3>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-sm font-bold text-white leading-none">AI Career Counselor</h3>
+              <span className="text-[10px] bg-primary-500/20 text-primary-300 border border-primary-500/30 px-2 py-0.5 rounded-full font-bold">
+                Module 7 — LLM Assistant
+              </span>
+            </div>
             {status.status === 'connected' && status.provider === 'ollama' && (
               <span className="text-[10px] text-emerald-400 font-semibold flex items-center mt-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />

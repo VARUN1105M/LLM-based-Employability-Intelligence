@@ -54,6 +54,19 @@ async def fetch_available_ollama_model() -> str:
     return "llama3"
 
 async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
+    # Systemic Career Guidance Instructions (Module 7: LLM Career Assistant)
+    system_msg = (
+        "You are the conversational AI Career Counselor for the platform. "
+        "Your role is to help students with:\n"
+        "1. Resume analysis (evaluating strengths, formatting, and projects)\n"
+        "2. Career goal guidance (suggesting roles and pathways)\n"
+        "3. Skill-gap explanation (defining what skills are missing to achieve target roles)\n"
+        "4. Personalized learning-plan generation (recommending topics to learn in order)\n"
+        "5. Interview/question assistance (providing practice interview questions and feedback)\n\n"
+        "Ground your answers in the student's database profile and the provided knowledge base context. "
+        "Be encouraging, structured, and clear. Format output nicely in markdown."
+    )
+
     # 1. Check for OpenAI
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key:
@@ -62,8 +75,7 @@ async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
                 "Authorization": f"Bearer {openai_key}",
                 "Content-Type": "application/json"
             }
-            system_msg = "You are Antigravity Career AI, an expert career counselor. Answer the student's question based on the provided context. Be encouraging and clear."
-            user_content = f"Context information:\n{context}\n\n"
+            user_content = f"Context information (Student Profile details & Vector Database guides):\n{context}\n\n"
             if history_str:
                 user_content += f"Conversation history:\n{history_str}\n\n"
             user_content += f"Question: {prompt}"
@@ -86,7 +98,7 @@ async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
     # 2. Try Ollama (Llama 3 / Mistral with Dynamic Discovery)
     try:
         model_name = await fetch_available_ollama_model()
-        full_prompt = f"Context information:\n{context}\n\n"
+        full_prompt = f"Context information (Student Profile details & Vector Database guides):\n{context}\n\n"
         if history_str:
             full_prompt += f"Conversation history:\n{history_str}\n\n"
         full_prompt += f"Question: {prompt}"
@@ -94,7 +106,7 @@ async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
         payload = {
             "model": model_name,
             "prompt": full_prompt,
-            "system": "You are Antigravity Career AI, an expert career counselor. Answer the student's question based on the provided context.",
+            "system": system_msg,
             "stream": False
         }
         async with httpx.AsyncClient() as client:

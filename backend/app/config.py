@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # Optional Supabase API keys for storage or edge functions
     SUPABASE_URL: Optional[str] = None
     SUPABASE_KEY: Optional[str] = None
+    GITHUB_TOKEN: Optional[str] = None
     
     # JWT security configuration
     SECRET_KEY: str = "SUPER_SECRET_KEY_FOR_FINAL_YEAR_PROJECT_DEVELOPMENT"

@@ -275,7 +275,7 @@ def sync_github_profile(username: str, current_user: User = Depends(get_current_
         raise HTTPException(status_code=400, detail="Invalid GitHub username provided.")
         
     headers = {"User-Agent": "fastapi-app"}
-    github_token = os.getenv("GITHUB_TOKEN")
+    github_token = settings.GITHUB_TOKEN or os.getenv("GITHUB_TOKEN")
     if github_token:
         headers["Authorization"] = f"token {github_token}"
     
@@ -469,6 +469,9 @@ def get_project_github_analysis(project_id: UUID, current_user: User = Depends(g
         raise HTTPException(status_code=400, detail="Project does not have a valid GitHub repository URL")
         
     headers = {"User-Agent": "fastapi-app"}
+    github_token = settings.GITHUB_TOKEN or os.getenv("GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"token {github_token}"
     
     # 1. Fetch Repo general statistics
     stats_url = f"https://api.github.com/repos/{owner}/{repo}"

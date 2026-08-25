@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { CheckSquare, ArrowRight, BrainCircuit, Sparkles, Trophy, RotateCcw } from 'lucide-react';
 
 export default function Assessments() {
@@ -52,7 +53,7 @@ export default function Assessments() {
     setAnswers({ ...answers, [currentQuestion]: opt });
   };
 
-  const nextQuestion = () => {
+  const nextQuestion = async () => {
     const questions = quizQuestions[activeQuiz];
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
@@ -65,6 +66,20 @@ export default function Assessments() {
       const finalScore = Math.round((correct / questions.length) * 100);
       setScore(finalScore);
       setQuizFinished(true);
+
+      // Submit score to backend
+      try {
+        const payload = {
+          aptitude_score: activeQuiz === 'aptitude' ? finalScore : 0.0,
+          logical_score: activeQuiz === 'aptitude' ? finalScore : 0.0,
+          technical_score: activeQuiz === 'technical' ? finalScore : 0.0,
+          communication_score: 0.0,
+          personality_score: 0.0
+        };
+        await axios.post('http://localhost:8085/api/profiles/assessment', payload);
+      } catch (err) {
+        console.error('Failed to submit assessment to ATIA engine:', err);
+      }
     }
   };
 

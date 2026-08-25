@@ -6,8 +6,9 @@ from uuid import UUID
 from datetime import date
 
 from app.database import get_db
-from app.models import User, StudentProfile, Mentor, Project, Certification, ExtractedSkill, ATIAPrediction, SkillGapAnalysis
+from app.models import User, StudentProfile, Mentor, Project, Certification, ExtractedSkill, ATIAPrediction, SkillGapAnalysis, Assessment
 from app.dependencies import get_current_user
+from app import schemas
 
 router = APIRouter(
     prefix="/api/profiles",
@@ -884,3 +885,102 @@ async def delete_student_resume(
     db.refresh(student)
     
     return {"message": "Resume deleted successfully"}
+
+@router.post("/assessment", response_model=schemas.AssessmentResponse)
+def submit_assessment(
+    assessment_in: schemas.AssessmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    # Save new assessment record
+    db_assessment = Assessment(
+        student_id=current_user.id,
+        aptitude_score=assessment_in.aptitude_score,
+        logical_score=assessment_in.logical_score,
+        technical_score=assessment_in.technical_score,
+        communication_score=assessment_in.communication_score,
+        personality_score=assessment_in.personality_score
+    )
+    db.add(db_assessment)
+    db.commit()
+    db.refresh(db_assessment)
+
+    # 2. Recalculate ATIA Predictions
+    skills = db.query(ExtractedSkill).filter(ExtractedSkill.student_id == current_user.id).all()
+    skills_lower = [s.skill_name.lower() for s in skills]
+
+    # Predict role based on matching skills
+    if any(s in skills_lower for s in ["machine learning", "tensorflow", "pytorch", "deep learning", "nlp", "ai", "llm", "rag", "scikit-learn"]):
+        predicted_role = "AI / ML Engineer"
+        interest_domain = "Artificial Intelligence"
+        required_skills_for_role = ["Python", "PyTorch", "Docker", "Machine Learning", "SQL"]
+    elif any(s in skills_lower for s in ["react", "next.js", "vue", "angular", "html", "css", "typescript", "javascript"]):
+        if any(s in skills_lower for s in ["node.js", "django", "flask", "fastapi", "postgresql", "mongodb", "mysql", "express"]):
+            predicted_role = "Full Stack Engineer"
+            interest_domain = "Web Development"
+            required_skills_for_role = ["React", "Node.js", "FastAPI", "Docker", "PostgreSQL"]
+        else:
+            predicted_role = "Frontend Engineer"
+            interest_domain = "UI/UX & Frontend"
+            required_skills_for_role = ["React", "TypeScript", "Tailwind", "CSS", "Vite"]
+    else:
+        predicted_role = "Software Developer"
+        interest_domain = "Software Development"
+        required_skills_for_role = ["Python", "Java", "Git", "SQL", "Docker"]
+
+    # Calculate scores with quiz influences
+    ability_score = 60.0 + min(len(skills) * 3.5, 30.0)
+    if student.cgpa:
+        ability_score += min((student.cgpa - 5.0) * 8.0, 10.0)
+
+    # Aggregate quiz outcomes (Aptitude & Technical)
+    quiz_bonus = 0.0
+    count_quizzes = 0
+    if db_assessment.logical_score > 0:
+        quiz_bonus += db_assessment.logical_score
+        count_quizzes += 1
+    if db_assessment.technical_score > 0:
+        quiz_bonus += db_assessment.technical_score
+        count_quizzes += 1
+        
+    if count_quizzes > 0:
+        avg_quiz = quiz_bonus / count_quizzes
+        ability_score += (avg_quiz - 50.0) * 0.2
+
+    ability_score = max(50.0, min(ability_score, 100.0))
+    employability_score = min(ability_score + 5.0, 100.0)
+    confidence = 0.82 + min(len(skills) * 0.01, 0.13)
+
+    # Remove older predictions and save the new ATIA prediction
+    db.query(ATIAPrediction).filter(ATIAPrediction.student_id == current_user.id).delete(synchronize_session=False)
+    prediction = ATIAPrediction(
+        student_id=current_user.id,
+        aptitude_level="Advanced" if (db_assessment.logical_score or 0) > 75 else "Intermediate",
+        technical_level="Advanced" if (db_assessment.technical_score or 0) > 75 else "Intermediate",
+        interest_domain=interest_domain,
+        ability_score=round(ability_score, 1),
+        employability_score=round(employability_score, 1),
+        confidence=round(confidence, 2),
+        predicted_role=predicted_role
+    )
+    db.add(prediction)
+
+    # 3. Update Skill Gap Analysis
+    db.query(SkillGapAnalysis).filter(SkillGapAnalysis.student_id == current_user.id).delete(synchronize_session=False)
+    for req_skill in required_skills_for_role:
+        if req_skill.lower() not in skills_lower:
+            gap = SkillGapAnalysis(
+                student_id=current_user.id,
+                required_skill=req_skill,
+                current_level="None",
+                required_level="Intermediate",
+                gap_percentage=60.0
+            )
+            db.add(gap)
+
+    db.commit()
+    return db_assessment

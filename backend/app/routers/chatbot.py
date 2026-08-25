@@ -8,7 +8,7 @@ import os
 
 from app.database import get_db
 from app.models import User
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_optional_current_user
 from app.config import settings
 
 router = APIRouter(
@@ -95,7 +95,7 @@ async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
         except Exception as e:
             print(f"OpenAI query failed: {e}")
 
-    # 2. Try Ollama (Llama 3 / Mistral with Dynamic Discovery)
+    # 2. Try Ollama (Llama 3 / Mistral / CodeLlama with Dynamic Discovery)
     try:
         model_name = await fetch_available_ollama_model()
         full_prompt = f"Context information (Student Profile details & Vector Database guides):\n{context}\n\n"
@@ -107,21 +107,24 @@ async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
             "model": model_name,
             "prompt": full_prompt,
             "system": system_msg,
-            "stream": False
+            "stream": False,
+            "options": {
+                "num_predict": 512
+            }
         }
         async with httpx.AsyncClient() as client:
-            res = await client.post("http://localhost:11434/api/generate", json=payload, timeout=15)
+            res = await client.post("http://localhost:11434/api/generate", json=payload, timeout=60.0)
             if res.status_code == 200:
-                return res.json()["response"]
-    except Exception:
-        pass
+                return res.json().get("response", "")
+    except Exception as e:
+        print(f"Ollama query failed for model '{model_name}': {e}")
 
     return ""
 
 @router.post("/query", response_model=QueryResponse)
 async def query_career_advisor(
     request: QueryRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
     user_query = request.message.strip()
@@ -130,9 +133,9 @@ async def query_career_advisor(
 
     # 1. Query PostgreSQL for student profile information (to personalize RAG context)
     profile_context = ""
-    student_name = current_user.full_name or "Student"
+    student_name = current_user.full_name if (current_user and current_user.full_name) else "Student"
     
-    if current_user.role == "student":
+    if current_user and current_user.role == "student":
         from app.models import StudentProfile, ExtractedSkill, Project, Certification, SkillGapAnalysis
         
         student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()

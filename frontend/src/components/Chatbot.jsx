@@ -62,9 +62,13 @@ export default function Chatbot() {
         text: msg.text
       }));
 
+      const authToken = localStorage.getItem('token');
       const response = await axios.post('http://localhost:8085/api/chatbot/query', {
         message: textToSend,
         history: historyPayload
+      }, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        timeout: 120000
       });
       
       const botMsg = {

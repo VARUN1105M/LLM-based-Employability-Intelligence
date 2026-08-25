@@ -34,8 +34,14 @@ export default function Chatbot() {
     setSubmitting(true);
 
     try {
+      const historyPayload = messages.map(msg => ({
+        sender: msg.sender,
+        text: msg.text
+      }));
+
       const response = await axios.post('http://localhost:8085/api/chatbot/query', {
-        message: textToSend
+        message: textToSend,
+        history: historyPayload
       });
       
       const botMsg = {

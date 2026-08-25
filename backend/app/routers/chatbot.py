@@ -16,8 +16,13 @@ router = APIRouter(
     tags=["chatbot"]
 )
 
+class ChatMessage(BaseModel):
+    sender: str
+    text: str
+
 class QueryRequest(BaseModel):
     message: str
+    history: Optional[List[ChatMessage]] = []
 
 class QueryResponse(BaseModel):
     response: str
@@ -36,7 +41,19 @@ def get_chroma_collection():
         # Collection might not exist yet if no docs were ingested
         return None
 
-async def query_llm(prompt: str, context: str) -> str:
+async def fetch_available_ollama_model() -> str:
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get("http://localhost:11434/api/tags", timeout=3)
+            if res.status_code == 200:
+                models = res.json().get("models", [])
+                if models:
+                    return models[0]["name"]
+    except Exception:
+        pass
+    return "llama3"
+
+async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
     # 1. Check for OpenAI
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key:
@@ -45,11 +62,17 @@ async def query_llm(prompt: str, context: str) -> str:
                 "Authorization": f"Bearer {openai_key}",
                 "Content-Type": "application/json"
             }
+            system_msg = "You are Antigravity Career AI, an expert career counselor. Answer the student's question based on the provided context. Be encouraging and clear."
+            user_content = f"Context information:\n{context}\n\n"
+            if history_str:
+                user_content += f"Conversation history:\n{history_str}\n\n"
+            user_content += f"Question: {prompt}"
+            
             payload = {
                 "model": "gpt-4o-mini",
                 "messages": [
-                    {"role": "system", "content": "You are Antigravity Career AI, an expert career counselor. Answer the student's question based on the provided context. Be encouraging and clear."},
-                    {"role": "user", "content": f"Context information:\n{context}\n\nQuestion: {prompt}"}
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_content}
                 ],
                 "temperature": 0.7
             }
@@ -60,11 +83,17 @@ async def query_llm(prompt: str, context: str) -> str:
         except Exception as e:
             print(f"OpenAI query failed: {e}")
 
-    # 2. Try Ollama (Llama 3 / Mistral)
+    # 2. Try Ollama (Llama 3 / Mistral with Dynamic Discovery)
     try:
+        model_name = await fetch_available_ollama_model()
+        full_prompt = f"Context information:\n{context}\n\n"
+        if history_str:
+            full_prompt += f"Conversation history:\n{history_str}\n\n"
+        full_prompt += f"Question: {prompt}"
+        
         payload = {
-            "model": "llama3",
-            "prompt": f"Context information:\n{context}\n\nQuestion: {prompt}",
+            "model": model_name,
+            "prompt": full_prompt,
             "system": "You are Antigravity Career AI, an expert career counselor. Answer the student's question based on the provided context.",
             "stream": False
         }
@@ -114,9 +143,15 @@ async def query_career_advisor(
     # Deduplicate sources
     sources = list(set(sources))
 
+    # Format chat history context string
+    history_str = ""
+    if request.history:
+        recent_history = request.history[-6:]
+        history_str = "\n".join([f"{'Student' if m.sender == 'user' else 'Counselor'}: {m.text}" for m in recent_history])
+
     # Try LLM response first
     if context_str:
-        llm_response = await query_llm(user_query, context_str)
+        llm_response = await query_llm(user_query, context_str, history_str)
         if llm_response:
             return QueryResponse(response=llm_response, sources=sources)
 

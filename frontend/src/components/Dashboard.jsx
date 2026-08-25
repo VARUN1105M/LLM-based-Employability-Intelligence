@@ -444,6 +444,105 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Adaptive Career Development & Talent DNA Pipeline */}
+      <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6 mt-6 col-span-full relative overflow-hidden">
+        <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-60 h-60 bg-indigo-500/5 rounded-full blur-[80px]" />
+        <div className="flex items-center space-x-2 mb-6">
+          <TrendingUp className="text-primary-400 h-5 w-5" />
+          <h3 className="text-base font-bold text-white">ATIA Adaptive Talent DNA & Career Pathway Cockpit</h3>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Step 1: Profile & Resume */}
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex flex-col justify-between hover:border-slate-700/60 transition-colors">
+            <div>
+              <span className="text-[10px] text-primary-400 font-bold uppercase block mb-1">Step 1: Ingestion</span>
+              <h4 className="text-sm font-bold text-white">Student Profile + Resume</h4>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                Resume parsed, experiences cataloged, and basic parameters synced.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Status:</span>
+              <span className={isOnboarded ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                {isOnboarded ? "✓ Synchronized" : "Pending"}
+              </span>
+            </div>
+          </div>
+
+          {/* Step 2: Gap Analysis & Vector DB Sync */}
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex flex-col justify-between hover:border-slate-700/60 transition-colors">
+            <div>
+              <span className="text-[10px] text-indigo-400 font-bold uppercase block mb-1">Step 2: Analysis</span>
+              <h4 className="text-sm font-bold text-white">Skill Gaps & Vector DB Sync</h4>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                Identifies missing qualifications and syncs profile with the local RAG knowledge base.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Gaps Identified:</span>
+              <span className="text-indigo-400 font-bold">{data.gaps?.length || 0} active</span>
+            </div>
+          </div>
+
+          {/* Step 3: RAG Chatbot & ATIA Engine */}
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex flex-col justify-between hover:border-slate-700/60 transition-colors">
+            <div>
+              <span className="text-[10px] text-emerald-400 font-bold uppercase block mb-1">Step 3: Intelligence</span>
+              <h4 className="text-sm font-bold text-white">RAG Chatbot + ATIA Engine</h4>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                Combines database profile statistics with vector guides for LLM counselor matching.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Readiness Score:</span>
+              <span className="text-emerald-400 font-bold">{prediction?.employability_score || 0}%</span>
+            </div>
+          </div>
+
+          {/* Step 4: Adaptive Quiz & ML Prediction */}
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-850 flex flex-col justify-between hover:border-slate-700/60 transition-colors">
+            <div>
+              <span className="text-[10px] text-amber-400 font-bold uppercase block mb-1">Step 4: Training & Mentor</span>
+              <h4 className="text-sm font-bold text-white">Adaptive Quizzes & Mentorship</h4>
+              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+                Logical/technical tests feed performance scores directly back into dynamic matched career plans.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Predicted Role:</span>
+              <span className="text-amber-400 font-bold">{prediction?.predicted_role || "Not Calculated"}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Visual Flow Connection Path */}
+        <div className="mt-8 bg-slate-950/80 p-5 rounded-2xl border border-slate-850/60">
+          <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-4">Talent DNA Adaptive Workflow Map</h4>
+          <div className="flex flex-col space-y-4 md:space-y-0 md:flex-row md:items-center md:justify-between text-[11px]">
+            <div className="flex items-center space-x-3 bg-slate-900/60 px-4 py-3 rounded-xl border border-slate-800/40">
+              <div className="h-6 w-6 rounded-lg bg-primary-500/20 text-primary-400 flex items-center justify-center font-bold">1</div>
+              <span className="font-semibold text-slate-300">Resume Processing & Gap Identification</span>
+            </div>
+            <div className="hidden md:block text-slate-650 font-bold">➔</div>
+            <div className="flex items-center space-x-3 bg-slate-900/60 px-4 py-3 rounded-xl border border-slate-800/40">
+              <div className="h-6 w-6 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">2</div>
+              <span className="font-semibold text-slate-300">ChromaDB Vector Store & RAG Prompts</span>
+            </div>
+            <div className="hidden md:block text-slate-650 font-bold">➔</div>
+            <div className="flex items-center space-x-3 bg-slate-900/60 px-4 py-3 rounded-xl border border-slate-800/40">
+              <div className="h-6 w-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">3</div>
+              <span className="font-semibold text-slate-300">ATIA Calculations & Adaptive Testing</span>
+            </div>
+            <div className="hidden md:block text-slate-650 font-bold">➔</div>
+            <div className="flex items-center space-x-3 bg-slate-900/60 px-4 py-3 rounded-xl border border-slate-800/40">
+              <div className="h-6 w-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">4</div>
+              <span className="font-semibold text-slate-300">ML Predictions & Mentor Matching</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Recent Activities */}
       <div className="bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-2xl p-6">
         <div className="flex items-center space-x-2 mb-6">

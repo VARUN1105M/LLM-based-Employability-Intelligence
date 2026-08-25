@@ -109,21 +109,51 @@ async def query_llm(prompt: str, context: str, history_str: str = "") -> str:
 @router.post("/query", response_model=QueryResponse)
 async def query_career_advisor(
     request: QueryRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     user_query = request.message.strip()
     if not user_query:
         raise HTTPException(status_code=400, detail="Query message cannot be empty")
 
-    collection = get_chroma_collection()
+    # 1. Query PostgreSQL for student profile information (to personalize RAG context)
+    profile_context = ""
+    student_name = current_user.full_name or "Student"
     
+    if current_user.role == "student":
+        from app.models import StudentProfile, ExtractedSkill, Project, Certification, SkillGapAnalysis
+        
+        student = db.query(StudentProfile).filter(StudentProfile.student_id == current_user.id).first()
+        if student:
+            student_name = student.full_name or student_name
+            skills = db.query(ExtractedSkill).filter(ExtractedSkill.student_id == current_user.id).all()
+            projects = db.query(Project).filter(Project.student_id == current_user.id).all()
+            certs = db.query(Certification).filter(Certification.student_id == current_user.id).all()
+            gaps = db.query(SkillGapAnalysis).filter(SkillGapAnalysis.student_id == current_user.id).all()
+            
+            skills_list = [s.skill_name for s in skills]
+            projects_list = [p.title for p in projects]
+            certs_list = [c.name for c in certs]
+            gaps_list = [g.required_skill for g in gaps]
+            
+            profile_context = (
+                f"Student Profile Context:\n"
+                f"- Name: {student_name}\n"
+                f"- CGPA: {student.cgpa or 'Not Provided'}\n"
+                f"- Current Skills: {', '.join(skills_list) if skills_list else 'None specified yet'}\n"
+                f"- Projects: {', '.join(projects_list) if projects_list else 'None listed'}\n"
+                f"- Certifications: {', '.join(certs_list) if certs_list else 'None listed'}\n"
+                f"- Active Skill Gaps to Bridge: {', '.join(gaps_list) if gaps_list else 'None detected'}\n"
+            )
+
+    # 2. Similarity search in local ChromaDB vector store
+    collection = get_chroma_collection()
     retrieved_docs = []
     sources = []
-    context_str = ""
+    knowledge_context = ""
 
     if collection:
         try:
-            # Query similarity search
             results = collection.query(
                 query_texts=[user_query],
                 n_results=3
@@ -136,7 +166,7 @@ async def query_career_advisor(
                 for idx, doc in enumerate(retrieved_docs):
                     source = metadatas[idx].get("source", "Career Document")
                     sources.append(source)
-                    context_str += f"\n[Source: {source}]\n{doc}\n"
+                    knowledge_context += f"\n[Source: {source}]\n{doc}\n"
         except Exception as e:
             print(f"Chroma DB query warning: {e}")
 
@@ -149,24 +179,44 @@ async def query_career_advisor(
         recent_history = request.history[-6:]
         history_str = "\n".join([f"{'Student' if m.sender == 'user' else 'Counselor'}: {m.text}" for m in recent_history])
 
-    # Try LLM response first
-    if context_str:
-        llm_response = await query_llm(user_query, context_str, history_str)
+    # 3. Combine both PostgreSQL profile details and ChromaDB vector search documents
+    combined_context = ""
+    if profile_context:
+        combined_context += profile_context + "\n"
+    if knowledge_context:
+        combined_context += f"Knowledge Base Documents:\n{knowledge_context}\n"
+    else:
+        combined_context += "Knowledge Base Documents: No matching career guides found in RAG.\n"
+
+    # Try querying the LLM
+    if combined_context.strip():
+        llm_response = await query_llm(user_query, combined_context, history_str)
         if llm_response:
             return QueryResponse(response=llm_response, sources=sources)
 
-    # Fallback response if LLM is offline or no documents exist
+    # 4. Fallback response if LLMs are offline
     if retrieved_docs:
-        response_text = "Here is what I found in our indexed career manuals:\n\n"
+        response_text = f"Hello {student_name}! Here is what I found in our indexed career manuals matching your query:\n\n"
         for idx, doc in enumerate(retrieved_docs):
             source = sources[idx] if idx < len(sources) else "Guide Doc"
             response_text += f"**From {source}:**\n{doc.strip()}\n\n"
-        response_text += "\n*(To enable conversational AI counseling responses, please start your local Ollama server running llama3 or set up `OPENAI_API_KEY` inside `.env`)*"
+        if profile_context:
+            response_text += f"**Based on your profile:**\n- Your active skills: {', '.join(skills_list) if skills_list else 'None'}\n- Skill gaps you need to bridge: {', '.join(gaps_list) if gaps_list else 'None'}\n\n"
+        response_text += "*(To enable conversational AI counseling responses, please start your local Ollama server running llama3 or set up `OPENAI_API_KEY` inside `.env`)*"
     else:
-        # Complete fallback when Chroma is empty
+        # Complete fallback when both Chroma is empty and LLMs are offline
         response_text = (
-            "Hello! I am your AI Career Counselor. It looks like our local knowledge base is empty.\n\n"
-            "**To fix this and get context-rich answers:**\n"
+            f"Hello {student_name}! I am your AI Career Counselor.\n\n"
+        )
+        if profile_context:
+            response_text += (
+                f"Here is a summary of your profile stats from the database:\n"
+                f"- **Active Skills:** {', '.join(skills_list) if skills_list else 'None'}\n"
+                f"- **Skill Gaps:** {', '.join(gaps_list) if gaps_list else 'None'}\n"
+                f"- **Projects:** {', '.join(projects_list) if projects_list else 'None'}\n\n"
+            )
+        response_text += (
+            "**To activate smart RAG answers:**\n"
             "1. Drop career documents (like PDF guides or syllabus files) inside the `backend/data/` folder.\n"
             "2. Run the indexing script to build your vector database:\n"
             "   `python -m app.scripts.ingest`\n"
